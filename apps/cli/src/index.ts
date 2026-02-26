@@ -54,7 +54,7 @@ function resolveApiBaseUrl(): string {
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-  let json = false;
+  let json = true;
   let command: CommandName | null = null;
   const positional: string[] = [];
   const flags = new Map<string, string | boolean>();
@@ -66,6 +66,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (token === "--json") {
       json = true;
+      continue;
+    }
+    if (token === "--text") {
+      json = false;
       continue;
     }
     if (token === "-h" || token === "--help") {
@@ -118,7 +122,7 @@ function buildHelpText(): string {
     "taskboard CLI",
     "",
     "Usage:",
-    "  taskboard [--json] <command> [arguments] [--flags]",
+    "  taskboard [--json|--text] <command> [arguments] [--flags]",
     "",
     "Commands:",
     "  create   Create a task",
@@ -128,7 +132,8 @@ function buildHelpText(): string {
     "  move     Move a task between statuses",
     "",
     "Global flags:",
-    "  --json   Emit machine-readable JSON output",
+    "  --json   Emit machine-readable JSON output (default)",
+    "  --text   Emit human-readable text output",
     "  --help   Show help",
     "",
     "Examples:",
