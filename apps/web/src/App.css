@@ -182,10 +182,56 @@ body {
 
 .column-body {
   min-height: 390px;
+  display: grid;
+  grid-auto-rows: max-content;
+  gap: 0.65rem;
+  align-content: start;
+  padding: 0.6rem;
   border: 1px dashed rgba(143, 156, 175, 0.25);
   border-radius: 8px;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px) 0 0 / 24px 24px,
     linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px) 0 0 / 24px 24px,
     var(--industrial-panel-strong);
+}
+
+.workflow-column.is-over {
+  border-color: rgba(124, 169, 255, 0.7);
+}
+
+.task-card {
+  border: 1px solid rgba(124, 169, 255, 0.4);
+  border-radius: 8px;
+  padding: 0.55rem 0.6rem;
+  background: linear-gradient(180deg, rgba(124, 169, 255, 0.14), rgba(22, 27, 34, 0.95));
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  cursor: grab;
+}
+
+.task-card:focus-visible {
+  outline: 2px solid rgba(124, 169, 255, 0.9);
+  outline-offset: 2px;
+}
+
+.task-card p {
+  margin: 0;
+  color: var(--industrial-text);
+  font-size: 0.83rem;
+}
+
+.task-card.is-dragging {
+  opacity: 0.35;
+  cursor: grabbing;
+}
+
+.task-card.overlay {
+  cursor: grabbing;
+  opacity: 0.95;
+}
+
+.empty-column {
+  margin: 0.25rem 0;
+  color: rgba(143, 156, 175, 0.85);
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
 }
