@@ -6,3 +6,4 @@ coverage/
 .env.local
 *.log
 *.tsbuildinfo
+apps/api/prisma/*.db

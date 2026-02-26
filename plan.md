@@ -164,15 +164,35 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
 
 ### T3b: Migrations and Seed Fixtures
 - **depends_on**: [T3a]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/api/prisma/migrations/*`, `apps/api/prisma/seed.ts`
 - **description**: Generate migration and deterministic seed data for all five statuses.
 - **validation**: `pnpm --filter api prisma migrate dev` and seed command succeed on clean DB.
+- **execution log**:
+  - Generated and applied initial Prisma migration under `apps/api/prisma/migrations/20260226063009_init_taskboard`.
+  - Added deterministic, rerunnable `prisma/seed.ts` using `upsert` with fixed IDs across all five workflow statuses.
+  - Verified migration/seed contracts and rerun behavior via targeted API test suite, `prisma migrate dev`, and direct seed execution.
+- **files edited/created**:
+  - `apps/api/prisma/migrations/20260226063009_init_taskboard/migration.sql` (created)
+  - `apps/api/prisma/migrations/migration_lock.toml` (created)
+  - `apps/api/prisma/seed.ts` (created)
+  - `plan.md` (edited)
 
 ### T4: Implement Local API Server
 - **depends_on**: [T1, T2, T3a]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/api/src/*`
 - **description**: Build CRUD, move endpoint with `expectedVersion`, conflict handling (`409`), and health endpoint.
 - **validation**: API smoke tests and manual `curl` checks for create/list/move/conflict.
+- **execution log**:
+  - Replaced API scaffold with a production-grade Node HTTP service exposing `GET /api/health`, `GET /api/tasks`, `POST /api/tasks`, `PATCH /api/tasks/:id`, and `POST /api/tasks/:id/move`.
+  - Wired shared contract parsing (`taskCreateInputSchema`, `taskUpdateInputSchema`, `taskMoveInputSchema`) and standardized error envelopes via `buildTaskError`.
+  - Implemented optimistic concurrency checks using `expectedVersion` and explicit `409 VERSION_CONFLICT` responses for stale updates.
+  - Added transition enforcement for move operations and deterministic position assignment for new/moved tasks.
+  - Validated route contract tests plus API typecheck/build.
+- **files edited/created**:
+  - `apps/api/src/index.ts` (edited)
+  - `plan.md` (edited)
 
 ### T5: Build Taskboard CLI
 - **depends_on**: [T2, T4]
