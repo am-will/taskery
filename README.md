@@ -1,51 +1,46 @@
-# Taskboard Workspace Contract (T0)
+# Taskboard Workspace
 
-This repository root defines the runtime/workspace contract for downstream tasks T1/T2.
+Monorepo for Taskboard API, web UI, CLI, and shared contracts.
 
-## Workspace Layout
+## Apps
 
-- `apps/*` for runnable applications (`web`, `api`, `cli` in T1)
-- `packages/*` for shared libraries (`shared` in T1/T2)
+- `apps/api`: Node + Prisma API
+- `apps/web`: React + Vite kanban UI
+- `apps/cli`: Taskboard CLI
+- `packages/shared`: shared task schemas, errors, and domain helpers
 
-## Fixed Local Runtime Ports
+## Local Runbook (Deterministic)
 
-- Web: `3010`
-- API: `3011`
+1. Install deps:
+   - `pnpm bootstrap`
+2. Apply schema to local SQLite DB (`apps/api/prisma/dev.db`):
+   - `pnpm --filter @taskboard/api exec prisma migrate deploy`
+3. Seed deterministic fixtures:
+   - `pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
+4. Start API (terminal 1):
+   - `API_HOST=127.0.0.1 API_PORT=4010 pnpm --filter @taskboard/api dev`
+5. Start web (terminal 2):
+   - `VITE_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/web dev`
+6. Use CLI (terminal 3):
+   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts list`
 
-## Local-Only CORS Policy
+## Health Checks
 
-API CORS must allow only these desktop-local origins:
+- API:
+  - `curl -sf http://127.0.0.1:4010/api/health`
+- API task list:
+  - `curl -sf http://127.0.0.1:4010/api/tasks`
+- CLI to API:
+  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts list`
 
-- `http://localhost:3010`
-- `http://127.0.0.1:3010`
+## Script Index
 
-Canonical env key: `CORS_ALLOWED_ORIGINS=http://localhost:3010,http://127.0.0.1:3010`
+- `pnpm bootstrap`
+- `pnpm dev`
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm test`
+- `pnpm test:domain`
 
-## Environment Contract
-
-Copy `.env.example` to `.env` and keep these values aligned across web/api/cli:
-
-- `API_PORT=3011`
-- `WEB_PORT=3010`
-- `API_BASE_URL=http://127.0.0.1:3011`
-- `CLI_API_BASE_URL=http://127.0.0.1:3011`
-- `CORS_ALLOWED_ORIGINS=http://localhost:3010,http://127.0.0.1:3010`
-
-## Root Scripts
-
-- `pnpm bootstrap`: install workspace dependencies
-- `pnpm dev`: run `dev` scripts across workspace packages in parallel
-- `pnpm typecheck`: run `typecheck` across workspace packages (`--if-present`)
-- `pnpm lint`: run `lint` across workspace packages (`--if-present`)
-- `pnpm test`: run `test` across workspace packages (`--if-present`, deterministic single-package concurrency)
-
-## Startup Order (Exact)
-
-1. `pnpm bootstrap`
-2. `pnpm --filter ./apps/api dev` (API on `http://127.0.0.1:3011`)
-3. `pnpm --filter ./apps/web dev` (Web on `http://127.0.0.1:3010`)
-4. Optional combined mode after T1 scaffolding: `pnpm dev`
-
-Notes:
-- T0 does not scaffold `apps/*` or `packages/*`; those are created in T1/T2.
-- CLI uses `CLI_API_BASE_URL` and should target API port `3011`.
+Full operational guide (startup, reset/seed, migration recovery, Codex integration, exit-code contracts):
+- `docs/codex-skill-taskboard.md`
