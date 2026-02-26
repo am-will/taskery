@@ -196,9 +196,22 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
 
 ### T5: Build Taskboard CLI
 - **depends_on**: [T2, T4]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/cli/src/*`, `apps/cli/bin/taskboard`
 - **description**: Implement commands for create/list/show/update/move against API with machine-readable JSON.
 - **validation**: CLI contract tests verify JSON schema, exit codes, and deterministic output.
+- **execution log**:
+  - Replaced CLI scaffold with full `taskboard` command surface (`create`, `list`, `show`, `update`, `move`) and help output.
+  - Implemented API-backed command execution with local base URL resolution from env (`CLI_API_BASE_URL` / `API_BASE_URL`).
+  - Added machine-readable JSON output mode and standardized error-to-exit-code mapping (`0`, `1`, `2`, `3`, `4`).
+  - Added and satisfied test-first CLI contract check for required commands and `--json` support.
+  - Verified CLI test, typecheck, and build.
+- **files edited/created**:
+  - `apps/cli/src/index.ts` (edited)
+  - `apps/cli/src/bin/taskboard.ts` (edited)
+  - `apps/cli/package.json` (edited, test runtime)
+  - `apps/cli/test/cli-contract.test.mjs` (created, prewritten test-first contract)
+  - `plan.md` (edited)
 
 ### T6: Build Desktop Dark UI Shell (Frontend Design Skill Direction)
 - **depends_on**: [T1, T2]
@@ -222,15 +235,40 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
 
 ### T7: Drag-and-Drop Kanban Behavior
 - **depends_on**: [T2, T4, T6]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/web/src/board/*`
 - **description**: Use dnd-kit multiple container pattern with `SortableContext` per column, `DragOverlay`, pointer + keyboard sensors, cross-column and intra-column reorder, and empty-column drop zones.
 - **validation**: UI test proves dragging between every status and reordering within a column; conflict rollback on stale version.
+- **execution log**:
+  - Added explicit board-state module with typed helpers for empty state, task insertion, and cross/intra-column move semantics.
+  - Integrated dnd-kit-driven drag/drop interactions in UI with pointer + keyboard sensors, sortable columns, and empty-column drop handling.
+  - Preserved existing editor shell and visual style while enabling status movement and reordering behavior.
+  - Added and satisfied test-first drag/drop state contract tests, then verified full web test/typecheck/build suite.
+- **files edited/created**:
+  - `apps/web/src/board/kanban-state.ts` (created)
+  - `apps/web/src/board/kanban-state.contract.test.ts` (created, prewritten test-first contract)
+  - `apps/web/src/App.tsx` (edited)
+  - `apps/web/src/App.css` (edited)
+  - `apps/web/package.json` (edited, dnd-kit deps)
+  - `pnpm-lock.yaml` (edited)
+  - `plan.md` (edited)
 
 ### T8: Task Create/Edit UX
 - **depends_on**: [T2, T3a, T4, T6]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/web/src/task-editor/*`
 - **description**: Add create/edit drawer/form for title, priority, due date, assignee, notes with validation.
 - **validation**: Form tests for required fields, invalid values, and successful save/update.
+- **execution log**:
+  - Added desktop-integrated task editor panel with `New Task` action and controlled create/edit form state.
+  - Implemented required form fields: `title`, `priority`, `due date`, `assignee`, and `notes`.
+  - Preserved and extended industrial-dark shell styling while keeping task editor scope separate from drag/drop behavior.
+  - Verified test-first editor contract, web typecheck, and production build.
+- **files edited/created**:
+  - `apps/web/src/App.tsx` (edited)
+  - `apps/web/src/App.css` (edited)
+  - `apps/web/src/task-editor.contract.test.tsx` (created, prewritten test-first contract)
+  - `plan.md` (edited)
 
 ### T9: CLI-to-UI Sync Strategy
 - **depends_on**: [T4, T5, T6]
@@ -257,15 +295,36 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
 
 ### T10b: API Integration Tests
 - **depends_on**: [T3b, T4]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/api/test/*`
 - **description**: Test CRUD, move ordering, conflict handling, and error envelopes with SQLite test DB.
 - **validation**: `pnpm test:api` passes.
+- **execution log**:
+  - Added API integration suite validating health, create/list, update, move, stale-version conflict (`409`), and not-found behavior.
+  - Upgraded API test runner to `node --import tsx --test` for stable TypeScript-backed integration execution.
+  - Confirmed integration tests execute against local SQLite-backed API behavior with deterministic assertions and expected envelopes/status codes.
+  - Verified API test suite and typecheck pass.
+- **files edited/created**:
+  - `apps/api/test/api.integration.test.mjs` (created)
+  - `apps/api/package.json` (edited, integration test runtime)
+  - `apps/api/src/index.ts` (edited, testability updates)
+  - `plan.md` (edited)
 
 ### T10c: CLI End-to-End Tests
 - **depends_on**: [T4, T5]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/cli/test/*`
 - **description**: Spawn API, run CLI commands, assert exit codes + JSON schema + persisted state.
 - **validation**: `pnpm test:cli` passes.
+- **execution log**:
+  - Added CLI e2e contract suite that provisions isolated SQLite state, runs API in-process, and validates create/update/move/show flows.
+  - Verified JSON-first CLI behavior for automation and asserted exit-code mapping for not-found (`3`) and stale-version conflict (`4`).
+  - Hardened test process lifecycle handling for API startup/teardown to reduce flakiness.
+  - Validated CLI test suite, typecheck, and build.
+- **files edited/created**:
+  - `apps/cli/test/cli-e2e.contract.test.mjs` (created, prewritten test-first contract then completed)
+  - `apps/cli/src/index.ts` (edited, JSON-first behavior and CLI output controls)
+  - `plan.md` (edited)
 
 ### T10d: Web UI Regression Tests
 - **depends_on**: [T6, T7, T8, T9]

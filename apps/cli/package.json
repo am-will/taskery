@@ -10,7 +10,7 @@
     "dev": "tsx watch src/bin/taskboard.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('No cli tests yet (T1 scaffold).')\""
+    "test": "node --test test/**/*.test.mjs"
   },
   "dependencies": {
     "@taskboard/shared": "workspace:*"
