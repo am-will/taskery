@@ -18,7 +18,22 @@ const DEFAULT_API_PORT = 4010;
 const TASK_ID_ROUTE_TEMPLATE = "/api/tasks/:id";
 const TASK_MOVE_ROUTE_TEMPLATE = "/api/tasks/:id/move";
 
-const prisma = new PrismaClient();
+function createPrismaClient(): PrismaClient {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (databaseUrl === undefined) {
+    return new PrismaClient();
+  }
+
+  return new PrismaClient({
+    datasources: {
+      db: {
+        url: databaseUrl,
+      },
+    },
+  });
+}
+
+const prisma = createPrismaClient();
 
 class ApiError extends Error {
   readonly statusCode: number;
