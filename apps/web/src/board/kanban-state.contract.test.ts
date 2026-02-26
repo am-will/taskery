@@ -46,4 +46,31 @@ describe("kanban drag-drop state transitions", () => {
 
     expect(moved.REVIEW.map((task) => task.id)).toEqual(["t2", "t3", "t1"]);
   });
+
+  it("inserts at the target index when moving across columns", () => {
+    const board = createEmptyBoardState();
+    const withTasks = insertTaskIntoColumn(
+      insertTaskIntoColumn(
+        insertTaskIntoColumn(
+          insertTaskIntoColumn(board, "PENDING", { id: "t1", title: "A" }),
+          "PENDING",
+          { id: "t2", title: "B" },
+        ),
+        "STARTED",
+        { id: "t3", title: "C" },
+      ),
+      "STARTED",
+      { id: "t4", title: "D" },
+    );
+
+    const moved = moveTaskCard(withTasks, {
+      taskId: "t2",
+      fromStatus: "PENDING",
+      toStatus: "STARTED",
+      toIndex: 1,
+    });
+
+    expect(moved.PENDING.map((task) => task.id)).toEqual(["t1"]);
+    expect(moved.STARTED.map((task) => task.id)).toEqual(["t3", "t2", "t4"]);
+  });
 });
