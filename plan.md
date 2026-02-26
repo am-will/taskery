@@ -140,8 +140,10 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
   - Added stable API/CLI error code constants and shared error envelope builder.
   - Expanded shared contract tests to cover transition edge cases, schema defaults/invalid inputs, and optimistic concurrency/order primitives.
 - **files edited/created**:
+  - `packages/shared/package.json` (edited)
   - `packages/shared/src/index.ts` (edited)
   - `packages/shared/src/contracts.test.ts` (edited)
+  - `pnpm-lock.yaml` (edited)
   - `plan.md` (edited)
 
 ### T3a: Prisma Schema and Constraints
