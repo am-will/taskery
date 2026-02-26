@@ -73,6 +73,92 @@ body {
   gap: 0.9rem;
 }
 
+.editor-panel {
+  margin-bottom: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--industrial-border);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(124, 169, 255, 0.1), transparent 40%),
+    var(--industrial-panel);
+}
+
+.editor-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px dashed rgba(143, 156, 175, 0.4);
+}
+
+.editor-panel-header h2 {
+  margin: 0;
+  color: var(--industrial-accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.new-task-button {
+  border: 1px solid rgba(124, 169, 255, 0.55);
+  border-radius: 8px;
+  padding: 0.45rem 0.85rem;
+  background: linear-gradient(140deg, rgba(124, 169, 255, 0.2), rgba(124, 169, 255, 0.08));
+  color: var(--industrial-text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.new-task-button:hover {
+  border-color: rgba(124, 169, 255, 0.8);
+  background: linear-gradient(140deg, rgba(124, 169, 255, 0.32), rgba(124, 169, 255, 0.14));
+}
+
+.task-form {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.task-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--industrial-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.task-form label:last-child {
+  grid-column: 1 / -1;
+}
+
+.task-form input,
+.task-form select,
+.task-form textarea {
+  border: 1px solid rgba(143, 156, 175, 0.45);
+  border-radius: 8px;
+  background: var(--industrial-panel-strong);
+  color: var(--industrial-text);
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0.5rem 0.6rem;
+}
+
+.task-form textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
 .workflow-column {
   min-height: 460px;
   padding: 0.8rem;
