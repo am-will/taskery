@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum TaskStatus {
+  PENDING
+  STARTED
+  BLOCKED
+  REVIEW
+  COMPLETE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Task {
+  id        String       @id @default(cuid())
+  title     String
+  status    TaskStatus   @default(PENDING)
+  priority  TaskPriority @default(MEDIUM)
+  dueAt     DateTime?
+  assignee  String?
+  notes     String?
+  position  Int
+  version   Int          @default(1)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  events TaskEvent[]
+
+  @@index([status, position])
+  @@index([updatedAt])
+}
+
+model TaskEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  eventType String
+  payload   String?
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([taskId, createdAt])
+}

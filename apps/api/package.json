@@ -7,13 +7,16 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('No api tests yet (T1 scaffold).')\""
+    "test": "node --test test/**/*.test.mjs",
+    "prisma": "prisma"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.2",
     "@taskboard/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "prisma": "^6.19.2",
     "tsx": "^4.20.5",
     "typescript": "^5.9.3"
   }
