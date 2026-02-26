@@ -1,4 +1,5 @@
 #!/usr/bin/env node
-import { runCliScaffold } from "../index.js";
+import { runTaskboardCli } from "../index.js";
 
-runCliScaffold();
+const exitCode = await runTaskboardCli();
+process.exitCode = exitCode;
