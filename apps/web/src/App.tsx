@@ -1,5 +1,5 @@
 import "./App.css";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DragEndEvent } from "@dnd-kit/core";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
@@ -14,6 +14,9 @@ import {
   insertTaskIntoColumn,
   moveTaskCard,
 } from "./board/kanban-state";
+
+const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
+const REFRESH_INTERVAL_MS = 5000;
 
 const statusLabels: Record<BoardStatus, string> = {
   PENDING: "Pending",
@@ -46,6 +49,19 @@ const parseColumnStatus = (id: string): BoardStatus | null => {
   return BOARD_STATUSES.includes(value) ? value : null;
 };
 
+type BoardSyncStatus = "syncing" | "synced" | "stale";
+
+type ApiTaskListItem = {
+  id: string;
+  title: string;
+  status: string;
+  position: number;
+};
+
+type ApiTaskListResponse = {
+  tasks?: unknown;
+};
+
 const findTaskLocation = (board: BoardState, taskId: string) => {
   for (const status of BOARD_STATUSES) {
     const index = board[status].findIndex((task) => task.id === taskId);
@@ -54,6 +70,87 @@ const findTaskLocation = (board: BoardState, taskId: string) => {
     }
   }
   return null;
+};
+
+const parseApiTask = (value: unknown): ApiTaskListItem | null => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const { id, title, status, position } = record;
+  if (
+    typeof id !== "string" ||
+    typeof title !== "string" ||
+    typeof status !== "string" ||
+    typeof position !== "number"
+  ) {
+    return null;
+  }
+
+  return { id, title, status, position };
+};
+
+const isBoardStatus = (value: string): value is BoardStatus =>
+  BOARD_STATUSES.includes(value as BoardStatus);
+
+const toBoardStateFromApiTasks = (tasks: ApiTaskListItem[]): BoardState => {
+  const nextBoard = createEmptyBoardState();
+  const sortedTasks = tasks
+    .slice()
+    .sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
+
+  for (const task of sortedTasks) {
+    if (!isBoardStatus(task.status)) {
+      continue;
+    }
+    nextBoard[task.status].push({ id: task.id, title: task.title });
+  }
+
+  return nextBoard;
+};
+
+const getApiBaseUrl = (): string => {
+  const configured = import.meta.env.VITE_API_BASE_URL;
+  if (typeof configured !== "string") {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  const trimmed = configured.trim();
+  if (trimmed.length === 0) {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+};
+
+const fetchBoardSnapshot = async (): Promise<BoardState> => {
+  const response = await fetch(`${getApiBaseUrl()}/api/tasks`);
+  if (!response.ok) {
+    throw new Error(`Task refresh failed with status ${response.status}`);
+  }
+
+  const payload = (await response.json()) as ApiTaskListResponse;
+  if (!Array.isArray(payload.tasks)) {
+    throw new Error("Task refresh returned an invalid payload");
+  }
+
+  const parsedTasks = payload.tasks
+    .map((entry) => parseApiTask(entry))
+    .filter((entry): entry is ApiTaskListItem => entry !== null);
+  return toBoardStateFromApiTasks(parsedTasks);
+};
+
+const syncStatusMessage = (status: BoardSyncStatus): string => {
+  if (status === "synced") {
+    return "Sync current with CLI updates.";
+  }
+
+  if (status === "stale") {
+    return "Sync stale. Retrying CLI update refresh.";
+  }
+
+  return "Sync in progress. Checking for CLI updates.";
 };
 
 const initialBoardState = insertTaskIntoColumn(
@@ -127,12 +224,56 @@ export function App() {
   const [taskDraft, setTaskDraft] = useState(defaultTaskDraft);
   const [board, setBoard] = useState<BoardState>(initialBoardState);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<BoardSyncStatus>("syncing");
+  const refreshInFlight = useRef(false);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let isDisposed = false;
+
+    const pollForBoardUpdates = async () => {
+      if (refreshInFlight.current) {
+        return;
+      }
+
+      refreshInFlight.current = true;
+      if (!isDisposed) {
+        setSyncStatus((current) => (current === "stale" ? "syncing" : current));
+      }
+
+      try {
+        const refreshedBoard = await fetchBoardSnapshot();
+        if (!isDisposed) {
+          setBoard(refreshedBoard);
+          setSyncStatus("synced");
+        }
+      } catch {
+        if (!isDisposed) {
+          setSyncStatus("stale");
+        }
+      } finally {
+        refreshInFlight.current = false;
+        if (!isDisposed) {
+          timer = setTimeout(pollForBoardUpdates, REFRESH_INTERVAL_MS);
+        }
+      }
+    };
+
+    void pollForBoardUpdates();
+
+    return () => {
+      isDisposed = true;
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+    };
+  }, []);
 
   const updateTaskDraft = (field: keyof typeof defaultTaskDraft, value: string) => {
     setTaskDraft((current) => ({ ...current, [field]: value }));
@@ -214,7 +355,17 @@ export function App() {
       >
         <header className="board-header">
           <h1>Taskboard</h1>
-          <p>Desktop workflow shell</p>
+          <div className="board-header-meta">
+            <p>Desktop workflow shell</p>
+            <p
+              className={`sync-indicator sync-${syncStatus}`}
+              data-testid="sync-indicator"
+              data-sync-status={syncStatus}
+              aria-live="polite"
+            >
+              {syncStatusMessage(syncStatus)}
+            </p>
+          </div>
         </header>
 
         <section className="editor-panel" aria-label="Task editor">

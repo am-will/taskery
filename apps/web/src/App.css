@@ -67,6 +67,40 @@ body {
   color: var(--industrial-muted);
 }
 
+.board-header-meta {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: end;
+}
+
+.sync-indicator {
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.73rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sync-indicator.sync-syncing {
+  border-color: rgba(124, 169, 255, 0.55);
+  color: rgba(188, 213, 255, 0.96);
+  background: rgba(124, 169, 255, 0.12);
+}
+
+.sync-indicator.sync-synced {
+  border-color: rgba(120, 228, 177, 0.5);
+  color: rgba(169, 245, 210, 0.96);
+  background: rgba(78, 184, 134, 0.14);
+}
+
+.sync-indicator.sync-stale {
+  border-color: rgba(255, 162, 99, 0.52);
+  color: rgba(255, 201, 152, 0.98);
+  background: rgba(220, 116, 58, 0.2);
+}
+
 .workflow-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(200px, 1fr));
