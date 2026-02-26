@@ -129,9 +129,20 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
 
 ### T2: Define Domain Invariants and Shared Contracts
 - **depends_on**: [T0]
+- **status**: Completed (February 26, 2026)
 - **location**: `packages/shared/src/*`
 - **description**: Add status transition matrix, ordering rules (`position`), optimistic concurrency (`version`), DTOs, and error schema.
 - **validation**: Contract tests compile and schema validation passes for sample payloads.
+- **execution log**:
+  - Replaced shared scaffold export with canonical task domain constants/types for statuses, priorities, versioning, and position sequencing.
+  - Added deterministic status transition policy and reusable helpers for transition checks, next-position generation, and invariant normalization for `position` and `version`.
+  - Implemented shared create/update/move DTO parse schemas with defaults, input constraints, and fail-fast validation semantics.
+  - Added stable API/CLI error code constants and shared error envelope builder.
+  - Expanded shared contract tests to cover transition edge cases, schema defaults/invalid inputs, and optimistic concurrency/order primitives.
+- **files edited/created**:
+  - `packages/shared/src/index.ts` (edited)
+  - `packages/shared/src/contracts.test.ts` (edited)
+  - `plan.md` (edited)
 
 ### T3a: Prisma Schema and Constraints
 - **depends_on**: [T1, T2]
