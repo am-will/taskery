@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   ERROR_CODES,
   INITIAL_TASK_VERSION,
+  MIN_POSITION,
   POSITION_STEP,
   TASK_PRIORITY_VALUES,
   TASK_STATUS_VALUES,
+  TASK_TRANSITION_POLICY,
   buildTaskError,
   getNextPosition,
   isTransitionAllowed,
@@ -31,8 +33,11 @@ describe("task domain contracts", () => {
   it("enforces transition policy", () => {
     expect(isTransitionAllowed("PENDING", "STARTED")).toBe(true);
     expect(isTransitionAllowed("STARTED", "COMPLETE")).toBe(true);
+    expect(isTransitionAllowed("BLOCKED", "PENDING")).toBe(false);
+    expect(isTransitionAllowed("REVIEW", "PENDING")).toBe(false);
     expect(isTransitionAllowed("COMPLETE", "PENDING")).toBe(false);
     expect(isTransitionAllowed("COMPLETE", "COMPLETE")).toBe(true);
+    expect(TASK_TRANSITION_POLICY.COMPLETE).toEqual(["COMPLETE"]);
   });
 
   it("calculates next position from ordered and unordered values", () => {
@@ -42,6 +47,14 @@ describe("task domain contracts", () => {
     );
     expect(
       getNextPosition([POSITION_STEP * 3, POSITION_STEP, POSITION_STEP * 2]),
+    ).toBe(POSITION_STEP * 4);
+    expect(
+      getNextPosition([
+        POSITION_STEP * 3,
+        POSITION_STEP * 2,
+        POSITION_STEP * 3,
+        POSITION_STEP,
+      ]),
     ).toBe(POSITION_STEP * 4);
   });
 
@@ -84,18 +97,29 @@ describe("task domain contracts", () => {
       taskUpdateInputSchema.parse({
         assignee: "will",
         notes: "follow-up",
+        expectedVersion: INITIAL_TASK_VERSION,
       }),
     ).toMatchObject({
       assignee: "will",
       notes: "follow-up",
+      expectedVersion: INITIAL_TASK_VERSION,
     });
+
+    expect(() => taskUpdateInputSchema.parse({})).toThrowError();
   });
 
   it("validates optimistic concurrency and position primitives", () => {
     expect(normalizeVersion(INITIAL_TASK_VERSION)).toBe(INITIAL_TASK_VERSION);
+    expect(normalizeVersion(INITIAL_TASK_VERSION + 1)).toBe(
+      INITIAL_TASK_VERSION + 1,
+    );
     expect(() => normalizeVersion(0)).toThrowError();
+    expect(() => normalizeVersion(1.2)).toThrowError();
+    expect(normalizePosition(MIN_POSITION)).toBe(MIN_POSITION);
     expect(normalizePosition(POSITION_STEP)).toBe(POSITION_STEP);
     expect(() => normalizePosition(999)).toThrowError();
+    expect(() => normalizePosition(POSITION_STEP + 1)).not.toThrowError();
+    expect(() => normalizePosition(1000.5)).toThrowError();
   });
 
   it("builds stable API/CLI error envelopes", () => {

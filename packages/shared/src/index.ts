@@ -285,6 +285,10 @@ export const taskUpdateInputSchema: Schema<TaskUpdateInput> = {
       output.expectedVersion = normalizeVersion(object.expectedVersion);
     }
 
+    if (Object.keys(output).length === 0) {
+      throw new Error("update payload must include at least one field");
+    }
+
     return output;
   },
 };
