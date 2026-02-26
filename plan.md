@@ -272,9 +272,20 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
 
 ### T9: CLI-to-UI Sync Strategy
 - **depends_on**: [T4, T5, T6]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/web/src/sync/*`
 - **description**: Implement polling-based refresh for task changes made by CLI and stale indicator/clear behavior.
 - **validation**: Scenario test where CLI move is reflected in board within max staleness threshold.
+- **execution log**:
+  - Added polling-based board refresh against API task list endpoint with periodic sync checks.
+  - Implemented explicit sync indicator UI (`data-testid=\"sync-indicator\"`) with states for syncing, stale, and synced conditions.
+  - Added stale-to-synced recovery regression coverage using controlled fetch/timer behavior.
+  - Verified full web test suite, typecheck, and build after sync integration.
+- **files edited/created**:
+  - `apps/web/src/App.tsx` (edited)
+  - `apps/web/src/App.css` (edited)
+  - `apps/web/src/sync-indicator.contract.test.tsx` (edited, prewritten test-first contract)
+  - `plan.md` (edited)
 
 ### T10a: Domain Unit Tests
 - **depends_on**: [T2]
@@ -328,15 +339,36 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
 
 ### T10d: Web UI Regression Tests
 - **depends_on**: [T6, T7, T8, T9]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/web/test/*`
 - **description**: Validate drag/drop flows, conflict rollback, and editor interactions.
 - **validation**: `pnpm test:web` passes.
+- **execution log**:
+  - Expanded regression coverage for kanban state transitions, including cross-column insertion ordering and drag/drop happy-path semantics.
+  - Strengthened sync indicator regression checks to assert stale -> syncing -> synced recovery behavior.
+  - Added editor interaction assertions for field updates and `New Task` reset behavior.
+  - Verified web regression suite, typecheck, and production build.
+- **files edited/created**:
+  - `apps/web/src/board/kanban-state.contract.test.ts` (edited)
+  - `apps/web/src/sync-indicator.contract.test.tsx` (edited)
+  - `apps/web/src/task-editor.contract.test.tsx` (edited)
+  - `plan.md` (edited)
 
 ### T11: Runbook and Codex Skill Integration Guide
 - **depends_on**: [T5, T7, T8, T9, T10a, T10b, T10c, T10d]
+- **status**: Completed (February 26, 2026)
 - **location**: `README.md`, `docs/codex-skill-taskboard.md`
 - **description**: Document startup sequence, CLI command examples for Codex skills, DB reset/recovery, and troubleshooting.
 - **validation**: Fresh-start runbook followed successfully on clean machine profile.
+- **execution log**:
+  - Updated `README.md` with deterministic startup flow, health checks, and script index aligned to implemented workspace behavior.
+  - Added `docs/codex-skill-taskboard.md` runbook covering startup, DB reset/seed, migration recovery, CLI automation patterns, and exit-code/error contracts.
+  - Documented API-unavailable behavior and retry guidance for automation callers.
+  - Verified CLI help command behavior and completed full workspace validation pass (`test`, `typecheck`, and build).
+- **files edited/created**:
+  - `README.md` (edited)
+  - `docs/codex-skill-taskboard.md` (created)
+  - `plan.md` (edited)
 
 ## Parallel Execution Groups
 
