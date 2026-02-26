@@ -148,9 +148,19 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
 
 ### T3a: Prisma Schema and Constraints
 - **depends_on**: [T1, T2]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/api/prisma/schema.prisma`
 - **description**: Create SQLite models and indexes (`status + position`, `updatedAt`, `version`) and task event/audit table.
 - **validation**: `pnpm --filter api prisma validate` succeeds.
+- **execution log**:
+  - Added `apps/api/prisma/schema.prisma` with SQLite datasource, Prisma client generator, task enums (`TaskStatus`, `TaskPriority`), and core `Task`/`TaskEvent` models.
+  - Implemented required schema constraints and indexing strategy, including `@@index([status, position])` and `@@index([updatedAt])`.
+  - Updated API package dependencies/scripts for Prisma tooling.
+  - Verified test-first contract and schema integrity with API test, Prisma validate, and API typecheck.
+- **files edited/created**:
+  - `apps/api/package.json` (edited)
+  - `apps/api/prisma/schema.prisma` (created)
+  - `plan.md` (edited)
 
 ### T3b: Migrations and Seed Fixtures
 - **depends_on**: [T3a]
@@ -172,9 +182,23 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
 
 ### T6: Build Desktop Dark UI Shell (Frontend Design Skill Direction)
 - **depends_on**: [T1, T2]
+- **status**: Completed (February 26, 2026)
 - **location**: `apps/web/src/*`
 - **description**: Create industrial-minimal dark board shell, desktop layout, custom typography, and clear column system.
 - **validation**: Local visual check on desktop width; no mobile-specific UI commitments.
+- **execution log**:
+  - Replaced scaffold UI with an industrial-minimal dark desktop shell using a clear visual system and CSS variables.
+  - Added explicit board root contract for testing/integration (`data-testid="board-shell"`, `data-theme="industrial-dark"`).
+  - Implemented desktop-first five-column workflow shell (`Pending`, `Started`, `Blocked`, `Review`, `Complete`) without drag/drop or API wiring.
+  - Added dedicated board styling in `App.css` with high-contrast surfaces, restrained accenting, and desktop-oriented spacing.
+  - Verified with web test, typecheck, and production build.
+- **files edited/created**:
+  - `apps/web/src/App.tsx` (edited)
+  - `apps/web/src/App.css` (created)
+  - `apps/web/src/app-shell.test.tsx` (created, prewritten test-first contract)
+  - `apps/web/package.json` (edited, test runtime)
+  - `pnpm-lock.yaml` (edited)
+  - `plan.md` (edited)
 
 ### T7: Drag-and-Drop Kanban Behavior
 - **depends_on**: [T2, T4, T6]
@@ -196,9 +220,20 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
 
 ### T10a: Domain Unit Tests
 - **depends_on**: [T2]
+- **status**: Completed (February 26, 2026)
 - **location**: `packages/shared/src/**/*.test.ts`
 - **description**: Test transitions, ordering logic, and version conflict helpers.
 - **validation**: `pnpm test:domain` passes.
+- **execution log**:
+  - Added/expanded shared domain-unit coverage for transition policy, position ordering semantics, version/position normalization, and invalid update payload rejection.
+  - Added deterministic root script `test:domain` to run shared contract tests directly.
+  - Tightened shared update DTO behavior so empty update payloads are rejected to satisfy fail-fast contract expectations.
+  - Validated with `pnpm test:domain` and shared package typecheck.
+- **files edited/created**:
+  - `package.json` (edited, added `test:domain`)
+  - `packages/shared/src/contracts.test.ts` (edited)
+  - `packages/shared/src/index.ts` (edited)
+  - `plan.md` (edited)
 
 ### T10b: API Integration Tests
 - **depends_on**: [T3b, T4]
