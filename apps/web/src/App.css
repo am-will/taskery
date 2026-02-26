@@ -1,0 +1,105 @@
+:root {
+  --industrial-bg: #0f1115;
+  --industrial-panel: #171b22;
+  --industrial-panel-strong: #1f2630;
+  --industrial-border: #2d3642;
+  --industrial-text: #e7ecf4;
+  --industrial-muted: #8f9caf;
+  --industrial-accent: #7ca9ff;
+  --industrial-shadow: 0 20px 48px rgba(0, 0, 0, 0.42);
+  color: var(--industrial-text);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    linear-gradient(140deg, rgba(124, 169, 255, 0.08), transparent 48%),
+    radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.05), transparent 42%),
+    var(--industrial-bg);
+}
+
+.app-root {
+  min-height: 100vh;
+  padding: 2.5rem;
+}
+
+.board-shell {
+  width: min(1360px, 100%);
+  margin: 0 auto;
+  padding: 1.5rem;
+  border: 1px solid var(--industrial-border);
+  border-radius: 14px;
+  background: rgba(18, 22, 29, 0.88);
+  box-shadow: var(--industrial-shadow);
+}
+
+.board-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--industrial-border);
+}
+
+.board-header h1,
+.board-header p,
+.workflow-column h2 {
+  margin: 0;
+}
+
+.board-header h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.board-header p {
+  font-size: 0.875rem;
+  color: var(--industrial-muted);
+}
+
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(200px, 1fr));
+  gap: 0.9rem;
+}
+
+.workflow-column {
+  min-height: 460px;
+  padding: 0.8rem;
+  border: 1px solid var(--industrial-border);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(124, 169, 255, 0.12), transparent 35%),
+    var(--industrial-panel);
+}
+
+.workflow-column h2 {
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px dashed rgba(143, 156, 175, 0.4);
+  color: var(--industrial-accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.column-body {
+  min-height: 390px;
+  border: 1px dashed rgba(143, 156, 175, 0.25);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px) 0 0 / 24px 24px,
+    var(--industrial-panel-strong);
+}
