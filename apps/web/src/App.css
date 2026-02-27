@@ -136,7 +136,7 @@ body {
   text-transform: uppercase;
 }
 
-.new-task-button {
+.editor-save-button {
   border: 1px solid rgba(124, 169, 255, 0.55);
   border-radius: 8px;
   padding: 0.45rem 0.85rem;
@@ -150,9 +150,14 @@ body {
   cursor: pointer;
 }
 
-.new-task-button:hover {
+.editor-save-button:hover:enabled {
   border-color: rgba(124, 169, 255, 0.8);
   background: linear-gradient(140deg, rgba(124, 169, 255, 0.32), rgba(124, 169, 255, 0.14));
+}
+
+.editor-save-button:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
 }
 
 .task-form {
@@ -234,9 +239,10 @@ body {
 }
 
 .task-card {
+  position: relative;
   border: 1px solid rgba(124, 169, 255, 0.4);
   border-radius: 8px;
-  padding: 0.55rem 0.6rem;
+  padding: 0.7rem 1.75rem 0.55rem 0.6rem;
   background: linear-gradient(180deg, rgba(124, 169, 255, 0.14), rgba(22, 27, 34, 0.95));
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
   cursor: grab;
@@ -251,6 +257,40 @@ body {
   margin: 0;
   color: var(--industrial-text);
   font-size: 0.83rem;
+}
+
+.task-card-delete {
+  position: absolute;
+  top: 0.28rem;
+  right: 0.28rem;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid rgba(255, 115, 115, 0.75);
+  border-radius: 4px;
+  padding: 0;
+  background: rgba(168, 43, 43, 0.24);
+  color: #ff8e8e;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.task-card-delete:hover:not(:disabled) {
+  border-color: rgba(255, 132, 132, 0.98);
+  background: rgba(198, 57, 57, 0.34);
+  color: #ffc0c0;
+}
+
+.task-card-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.task-card-delete:focus-visible {
+  outline: 2px solid rgba(255, 132, 132, 0.92);
+  outline-offset: 1px;
 }
 
 .task-card.is-dragging {

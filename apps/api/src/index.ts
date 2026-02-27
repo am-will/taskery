@@ -6,6 +6,7 @@ import {
   getNextPosition,
   isTransitionAllowed,
   taskCreateInputSchema,
+  taskDeleteInputSchema,
   taskMoveInputSchema,
   taskUpdateInputSchema,
   type Task,
@@ -15,6 +16,10 @@ import {
 
 const DEFAULT_API_HOST = "127.0.0.1";
 const DEFAULT_API_PORT = 4010;
+const DEFAULT_CORS_ALLOWED_ORIGINS = [
+  "http://127.0.0.1:3010",
+  "http://localhost:3010",
+];
 const TASK_ID_ROUTE_TEMPLATE = "/api/tasks/:id";
 const TASK_MOVE_ROUTE_TEMPLATE = "/api/tasks/:id/move";
 
@@ -59,6 +64,50 @@ function parsePort(value: string | undefined): number {
   }
 
   return parsed;
+}
+
+function parseAllowedOrigins(value: string | undefined): Set<string> {
+  if (value === undefined || value.trim().length === 0) {
+    return new Set(DEFAULT_CORS_ALLOWED_ORIGINS);
+  }
+
+  const origins = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  if (origins.length === 0) {
+    return new Set(DEFAULT_CORS_ALLOWED_ORIGINS);
+  }
+
+  return new Set(origins);
+}
+
+const allowedOrigins = parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS);
+
+function isLoopbackOrigin(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== "http:") {
+      return false;
+    }
+    return parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost";
+  } catch {
+    return false;
+  }
+}
+
+function applyCors(request: IncomingMessage, response: ServerResponse): void {
+  const requestOrigin = request.headers.origin;
+  if (
+    typeof requestOrigin === "string" &&
+    (allowedOrigins.has(requestOrigin) || isLoopbackOrigin(requestOrigin))
+  ) {
+    response.setHeader("access-control-allow-origin", requestOrigin);
+    response.setHeader("vary", "Origin");
+  }
+
+  response.setHeader("access-control-allow-methods", "GET,POST,PATCH,DELETE,OPTIONS");
+  response.setHeader("access-control-allow-headers", "content-type");
 }
 
 function sendJson(response: ServerResponse, statusCode: number, payload: unknown): void {
@@ -332,6 +381,39 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     }
   }
 
+  if (method === "DELETE") {
+    const taskId = extractTaskId(pathname);
+    if (taskId !== null) {
+      const body = await readJsonBody(request);
+      const input = taskDeleteInputSchema.parse(body);
+
+      const deleted = await prisma.$transaction(async (tx) => {
+        const current = await tx.task.findUnique({
+          where: { id: taskId },
+          select: { id: true, version: true },
+        });
+        if (current === null) {
+          throw new ApiError(404, ERROR_CODES.TASK_NOT_FOUND, `Task ${taskId} was not found`);
+        }
+        if (current.version !== input.expectedVersion) {
+          throw new ApiError(
+            409,
+            ERROR_CODES.VERSION_CONFLICT,
+            `Task ${taskId} has a stale expectedVersion`,
+            { expectedVersion: input.expectedVersion, actualVersion: current.version },
+          );
+        }
+
+        return tx.task.delete({
+          where: { id: taskId },
+        });
+      });
+
+      sendJson(response, 200, { task: toTaskDto(deleted) });
+      return;
+    }
+  }
+
   if (
     pathname === "/api/health" ||
     pathname === "/api/tasks" ||
@@ -354,6 +436,13 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
 export function createApiServer(): Server {
   return createServer(async (request, response) => {
+    applyCors(request, response);
+    if (request.method === "OPTIONS") {
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+
     try {
       await handleRequest(request, response);
     } catch (error) {

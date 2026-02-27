@@ -13,6 +13,7 @@ import {
   normalizePosition,
   normalizeVersion,
   taskCreateInputSchema,
+  taskDeleteInputSchema,
   taskMoveInputSchema,
   taskUpdateInputSchema,
 } from "./index.js";
@@ -58,7 +59,7 @@ describe("task domain contracts", () => {
     ).toBe(POSITION_STEP * 4);
   });
 
-  it("validates create, move and update DTOs", () => {
+  it("validates create, move, update and delete DTOs", () => {
     expect(
       taskCreateInputSchema.parse({
         title: "Write release notes",
@@ -106,6 +107,21 @@ describe("task domain contracts", () => {
     });
 
     expect(() => taskUpdateInputSchema.parse({})).toThrowError();
+
+    expect(
+      taskDeleteInputSchema.parse({
+        expectedVersion: INITIAL_TASK_VERSION,
+      }),
+    ).toMatchObject({
+      expectedVersion: INITIAL_TASK_VERSION,
+    });
+
+    expect(() => taskDeleteInputSchema.parse({})).toThrowError();
+    expect(() =>
+      taskDeleteInputSchema.parse({
+        expectedVersion: "1",
+      }),
+    ).toThrowError();
   });
 
   it("validates optimistic concurrency and position primitives", () => {

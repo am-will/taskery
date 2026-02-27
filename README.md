@@ -23,6 +23,7 @@ Monorepo for Taskboard API, web UI, CLI, and shared contracts.
    - `VITE_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/web dev`
 6. Use CLI (terminal 3):
    - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts list`
+   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts delete <taskId> --expectedVersion <version>`
 
 ## Health Checks
 

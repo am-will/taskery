@@ -68,6 +68,8 @@ Examples:
   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts update <taskId> --title "Updated title" --expectedVersion <version>`
 - Move task:
   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts move <taskId> --toStatus REVIEW --expectedVersion <version>`
+- Delete task:
+  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts delete <taskId> --expectedVersion <version>`
 - Human-readable output for operator use:
   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts list --text`
 

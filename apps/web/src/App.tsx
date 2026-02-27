@@ -1,5 +1,5 @@
 import "./App.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { DragEndEvent } from "@dnd-kit/core";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
@@ -11,7 +11,6 @@ import {
   type BoardStatus,
   type BoardTask,
   createEmptyBoardState,
-  insertTaskIntoColumn,
   moveTaskCard,
 } from "./board/kanban-state";
 
@@ -32,6 +31,13 @@ const defaultTaskDraft = {
   dueDate: "",
   assignee: "",
   notes: "",
+};
+
+const priorityToApiValue: Record<string, "LOW" | "MEDIUM" | "HIGH" | "URGENT"> = {
+  Low: "LOW",
+  Medium: "MEDIUM",
+  High: "HIGH",
+  Critical: "URGENT",
 };
 
 const taskDragId = (taskId: string) => `task:${taskId}`;
@@ -56,6 +62,7 @@ type ApiTaskListItem = {
   title: string;
   status: string;
   position: number;
+  version: number;
 };
 
 type ApiTaskListResponse = {
@@ -78,17 +85,18 @@ const parseApiTask = (value: unknown): ApiTaskListItem | null => {
   }
 
   const record = value as Record<string, unknown>;
-  const { id, title, status, position } = record;
+  const { id, title, status, position, version } = record;
   if (
     typeof id !== "string" ||
     typeof title !== "string" ||
     typeof status !== "string" ||
-    typeof position !== "number"
+    typeof position !== "number" ||
+    typeof version !== "number"
   ) {
     return null;
   }
 
-  return { id, title, status, position };
+  return { id, title, status, position, version };
 };
 
 const isBoardStatus = (value: string): value is BoardStatus =>
@@ -104,7 +112,7 @@ const toBoardStateFromApiTasks = (tasks: ApiTaskListItem[]): BoardState => {
     if (!isBoardStatus(task.status)) {
       continue;
     }
-    nextBoard[task.status].push({ id: task.id, title: task.title });
+    nextBoard[task.status].push({ id: task.id, title: task.title, version: task.version });
   }
 
   return nextBoard;
@@ -153,32 +161,23 @@ const syncStatusMessage = (status: BoardSyncStatus): string => {
   return "Sync in progress. Checking for CLI updates.";
 };
 
-const initialBoardState = insertTaskIntoColumn(
-  insertTaskIntoColumn(
-    insertTaskIntoColumn(
-      insertTaskIntoColumn(createEmptyBoardState(), "PENDING", {
-        id: "task-1",
-        title: "Finalize onboarding checklist",
-      }),
-      "PENDING",
-      {
-        id: "task-2",
-        title: "Backfill sprint metrics dashboard",
-      },
-    ),
-    "STARTED",
-    { id: "task-3", title: "QA pass for release candidate" },
-  ),
-  "REVIEW",
-  { id: "task-4", title: "Approve payment retry copy" },
-);
-
-function SortableTaskCard({ task }: { task: BoardTask }) {
+function SortableTaskCard({
+  task,
+  onDeleteTask,
+  isDeleting,
+}: {
+  task: BoardTask;
+  onDeleteTask: (task: BoardTask) => Promise<void>;
+  isDeleting: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: taskDragId(task.id) });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+  };
+  const stopEventPropagation = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation();
   };
 
   return (
@@ -189,6 +188,20 @@ function SortableTaskCard({ task }: { task: BoardTask }) {
       {...attributes}
       {...listeners}
     >
+      <button
+        type="button"
+        className="task-card-delete"
+        aria-label={`Delete task ${task.title}`}
+        disabled={isDeleting}
+        onPointerDown={stopEventPropagation}
+        onKeyDown={stopEventPropagation}
+        onClick={(event) => {
+          stopEventPropagation(event);
+          void onDeleteTask(task);
+        }}
+      >
+        X
+      </button>
       <p>{task.title}</p>
     </article>
   );
@@ -197,9 +210,13 @@ function SortableTaskCard({ task }: { task: BoardTask }) {
 function Column({
   status,
   tasks,
+  onDeleteTask,
+  deletingTaskIds,
 }: {
   status: BoardStatus;
   tasks: BoardTask[];
+  onDeleteTask: (task: BoardTask) => Promise<void>;
+  deletingTaskIds: Set<string>;
 }) {
   const { isOver, setNodeRef } = useDroppable({
     id: columnDropId(status),
@@ -212,7 +229,12 @@ function Column({
         <SortableContext items={tasks.map((task) => taskDragId(task.id))} strategy={verticalListSortingStrategy}>
           {tasks.length === 0 ? <p className="empty-column">Drop tasks here</p> : null}
           {tasks.map((task) => (
-            <SortableTaskCard key={task.id} task={task} />
+            <SortableTaskCard
+              key={task.id}
+              task={task}
+              onDeleteTask={onDeleteTask}
+              isDeleting={deletingTaskIds.has(task.id)}
+            />
           ))}
         </SortableContext>
       </div>
@@ -222,10 +244,12 @@ function Column({
 
 export function App() {
   const [taskDraft, setTaskDraft] = useState(defaultTaskDraft);
-  const [board, setBoard] = useState<BoardState>(initialBoardState);
+  const [board, setBoard] = useState<BoardState>(createEmptyBoardState);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<BoardSyncStatus>("syncing");
-  const refreshInFlight = useRef(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [deletingTaskIds, setDeletingTaskIds] = useState<Set<string>>(new Set());
+  const refreshPromiseRef = useRef<Promise<void> | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -233,32 +257,40 @@ export function App() {
     }),
   );
 
+  const refreshBoardFromApi = async (promoteFromStale: boolean): Promise<void> => {
+    if (refreshPromiseRef.current !== null) {
+      await refreshPromiseRef.current;
+      return;
+    }
+
+    if (promoteFromStale) {
+      setSyncStatus((current) => (current === "stale" ? "syncing" : current));
+    }
+
+    const refreshPromise = (async () => {
+      try {
+        const refreshedBoard = await fetchBoardSnapshot();
+        setBoard(refreshedBoard);
+        setSyncStatus("synced");
+      } catch {
+        setSyncStatus("stale");
+      } finally {
+        refreshPromiseRef.current = null;
+      }
+    })();
+
+    refreshPromiseRef.current = refreshPromise;
+    await refreshPromise;
+  };
+
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let isDisposed = false;
 
     const pollForBoardUpdates = async () => {
-      if (refreshInFlight.current) {
-        return;
-      }
-
-      refreshInFlight.current = true;
-      if (!isDisposed) {
-        setSyncStatus((current) => (current === "stale" ? "syncing" : current));
-      }
-
       try {
-        const refreshedBoard = await fetchBoardSnapshot();
-        if (!isDisposed) {
-          setBoard(refreshedBoard);
-          setSyncStatus("synced");
-        }
-      } catch {
-        if (!isDisposed) {
-          setSyncStatus("stale");
-        }
+        await refreshBoardFromApi(true);
       } finally {
-        refreshInFlight.current = false;
         if (!isDisposed) {
           timer = setTimeout(pollForBoardUpdates, REFRESH_INTERVAL_MS);
         }
@@ -309,6 +341,10 @@ export function App() {
     if (!activeLocation) {
       return;
     }
+    const activeTaskCardRecord = board[activeLocation.status][activeLocation.index];
+    if (!activeTaskCardRecord) {
+      return;
+    }
 
     const overId = String(event.over.id);
     const overTaskId = parseTaskId(overId);
@@ -332,6 +368,11 @@ export function App() {
           toIndex: overLocation.index,
         }),
       );
+      void persistMove(
+        activeTaskCardRecord,
+        overLocation.status,
+        overLocation.index,
+      );
       return;
     }
 
@@ -343,6 +384,114 @@ export function App() {
         toIndex: currentBoard[overColumn!].length,
       }),
     );
+    void persistMove(activeTaskCardRecord, overColumn!, board[overColumn!].length);
+  };
+
+  const persistMove = async (
+    task: BoardTask,
+    toStatus: BoardStatus,
+    toIndex: number,
+  ): Promise<void> => {
+    setSyncStatus("syncing");
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/tasks/${task.id}/move`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          toStatus,
+          toPosition: (toIndex + 1) * 1000,
+          expectedVersion: task.version ?? 1,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Move failed with status ${response.status}`);
+      }
+      await refreshBoardFromApi(false);
+    } catch {
+      setSyncStatus("stale");
+      await refreshBoardFromApi(true);
+    }
+  };
+
+  const handleCreateTask = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedTitle = taskDraft.title.trim();
+    if (normalizedTitle.length === 0 || isSavingDraft) {
+      return;
+    }
+
+    const priority = priorityToApiValue[taskDraft.priority] ?? "MEDIUM";
+    const assignee = taskDraft.assignee.trim();
+    const notes = taskDraft.notes.trim();
+    const payload: Record<string, unknown> = {
+      title: normalizedTitle,
+      priority,
+      status: "PENDING",
+    };
+    if (taskDraft.dueDate.trim().length > 0) {
+      payload.dueAt = `${taskDraft.dueDate}T17:00:00.000Z`;
+    }
+    if (assignee.length > 0) {
+      payload.assignee = assignee;
+    }
+    if (notes.length > 0) {
+      payload.notes = notes;
+    }
+
+    setIsSavingDraft(true);
+    setSyncStatus("syncing");
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error(`Create failed with status ${response.status}`);
+      }
+      setTaskDraft(defaultTaskDraft);
+      await refreshBoardFromApi(false);
+    } catch {
+      setSyncStatus("stale");
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
+  const handleDeleteTask = async (task: BoardTask): Promise<void> => {
+    if (deletingTaskIds.has(task.id)) {
+      return;
+    }
+
+    setDeletingTaskIds((current) => {
+      const next = new Set(current);
+      next.add(task.id);
+      return next;
+    });
+    setSyncStatus("syncing");
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/tasks/${task.id}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          expectedVersion: task.version ?? 1,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Delete failed with status ${response.status}`);
+      }
+      setActiveTaskId((currentTaskId) => (currentTaskId === task.id ? null : currentTaskId));
+      await refreshBoardFromApi(false);
+    } catch {
+      setSyncStatus("stale");
+      await refreshBoardFromApi(true);
+    } finally {
+      setDeletingTaskIds((current) => {
+        const next = new Set(current);
+        next.delete(task.id);
+        return next;
+      });
+    }
   };
 
   return (
@@ -372,15 +521,21 @@ export function App() {
           <div className="editor-panel-header">
             <h2>Task Editor</h2>
             <button
-              type="button"
-              className="new-task-button"
-              onClick={() => setTaskDraft(defaultTaskDraft)}
+              type="submit"
+              form="task-editor-form"
+              className="editor-save-button"
+              disabled={isSavingDraft}
             >
-              New Task
+              {isSavingDraft ? "Saving..." : "Save Task"}
             </button>
           </div>
 
-          <form className="task-form" aria-label="Create or edit task">
+          <form
+            id="task-editor-form"
+            className="task-form"
+            aria-label="Create or edit task"
+            onSubmit={handleCreateTask}
+          >
             <label htmlFor="task-title">
               Title
               <input
@@ -449,7 +604,13 @@ export function App() {
         >
           <section className="workflow-grid" role="list" aria-label="Workflow columns">
             {BOARD_STATUSES.map((status) => (
-              <Column key={status} status={status} tasks={board[status]} />
+              <Column
+                key={status}
+                status={status}
+                tasks={board[status]}
+                onDeleteTask={handleDeleteTask}
+                deletingTaskIds={deletingTaskIds}
+              />
             ))}
           </section>
           <DragOverlay>

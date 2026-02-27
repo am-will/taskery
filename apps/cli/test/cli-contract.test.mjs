@@ -19,5 +19,6 @@ test("taskboard CLI exposes required command surface", () => {
   assert.match(help.stdout, /\bshow\b/i);
   assert.match(help.stdout, /\bupdate\b/i);
   assert.match(help.stdout, /\bmove\b/i);
+  assert.match(help.stdout, /\bdelete\b/i);
   assert.match(help.stdout, /--json/i);
 });

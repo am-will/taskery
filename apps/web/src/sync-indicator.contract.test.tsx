@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
@@ -96,6 +97,49 @@ describe("board sync indicator", () => {
       );
       await flushMicrotasks();
     });
+    expect(screen.getByTestId("sync-indicator").getAttribute("data-sync-status")).toBe(
+      "synced",
+    );
+  });
+
+  it("recovers from overlapping strict-mode refresh and continues polling", async () => {
+    vi.useFakeTimers();
+    let resolveInitial: ((response: Response) => void) | null = null;
+    const initialFetch = new Promise<Response>((resolve) => {
+      resolveInitial = resolve;
+    });
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockReturnValueOnce(initialFetch);
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ tasks: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+
+    await act(async () => {
+      resolveInitial?.(
+        new Response(JSON.stringify({ tasks: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+      await flushMicrotasks();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await flushMicrotasks();
+    });
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(screen.getByTestId("sync-indicator").getAttribute("data-sync-status")).toBe(
       "synced",
     );

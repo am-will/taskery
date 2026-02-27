@@ -11,6 +11,7 @@ export type BoardStatus = (typeof BOARD_STATUSES)[number];
 export type BoardTask = {
   id: string;
   title: string;
+  version?: number;
 };
 
 export type BoardState = Record<BoardStatus, BoardTask[]>;

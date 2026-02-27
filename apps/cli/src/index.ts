@@ -8,7 +8,7 @@ const EXIT_CODE_CONFLICT = 4;
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
 
-type CommandName = "create" | "list" | "show" | "update" | "move";
+type CommandName = "create" | "list" | "show" | "update" | "move" | "delete";
 
 type ParsedArgs = {
   json: boolean;
@@ -114,7 +114,14 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 function isCommandName(value: string): value is CommandName {
-  return value === "create" || value === "list" || value === "show" || value === "update" || value === "move";
+  return (
+    value === "create" ||
+    value === "list" ||
+    value === "show" ||
+    value === "update" ||
+    value === "move" ||
+    value === "delete"
+  );
 }
 
 function buildHelpText(): string {
@@ -130,6 +137,7 @@ function buildHelpText(): string {
     "  show     Show one task",
     "  update   Update a task",
     "  move     Move a task between statuses",
+    "  delete   Delete a task",
     "",
     "Global flags:",
     "  --json   Emit machine-readable JSON output (default)",
@@ -142,6 +150,7 @@ function buildHelpText(): string {
     "  taskboard show task_123",
     "  taskboard update task_123 --title \"Rename\" --expectedVersion 2",
     "  taskboard move task_123 --toStatus REVIEW --expectedVersion 3",
+    "  taskboard delete task_123 --expectedVersion 4",
     "",
   ].join("\n");
 }
@@ -216,7 +225,7 @@ function parseRequiredString(
 
 async function callApi<T>(
   baseUrl: string,
-  method: "GET" | "POST" | "PATCH",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<{ ok: true; value: T } | { ok: false; failure: CliFailure }> {
@@ -589,6 +598,42 @@ async function runMove(
   return { ok: true, value: response.value.task };
 }
 
+async function runDelete(
+  baseUrl: string,
+  positional: string[],
+  flags: Map<string, string | boolean>,
+): Promise<CliResult> {
+  const taskId = readStringFlag(flags, "id") ?? positional[0];
+  const parsedTaskId = parseRequiredString(taskId, "task id");
+  if (typeof parsedTaskId !== "string") {
+    return parsedTaskId;
+  }
+
+  const expectedVersion = parseIntegerFlag(flags, "expectedVersion");
+  if (isCliFailure(expectedVersion)) {
+    return expectedVersion;
+  }
+  if (expectedVersion === undefined) {
+    return toCliFailure(
+      ERROR_CODES.VALIDATION_ERROR,
+      "expectedVersion is required",
+      EXIT_CODE_VALIDATION,
+    );
+  }
+
+  const response = await callApi<ApiTaskResponse>(
+    baseUrl,
+    "DELETE",
+    `/api/tasks/${encodeURIComponent(parsedTaskId)}`,
+    { expectedVersion },
+  );
+  if (!response.ok) {
+    return response.failure;
+  }
+
+  return { ok: true, value: response.value.task };
+}
+
 function isCliFailure(value: number | CliFailure | undefined): value is CliFailure {
   return typeof value === "object" && value !== null && value.ok === false;
 }
@@ -625,6 +670,9 @@ export async function runTaskboardCli(argv: string[] = process.argv.slice(2)): P
       break;
     case "move":
       result = await runMove(baseUrl, parsed.positional, parsed.flags);
+      break;
+    case "delete":
+      result = await runDelete(baseUrl, parsed.positional, parsed.flags);
       break;
   }
 

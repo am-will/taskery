@@ -187,6 +187,7 @@ test("cli e2e emits json by default and maps not-found/conflict exit codes", asy
     const updatedPayload = parseJsonStdout(updated, "update");
     assert.equal(updatedPayload.ok, true);
     assert.equal(updatedPayload.data.version, createdVersion + 1);
+    const updatedVersion = updatedPayload.data.version;
 
     const staleMove = runCli(
       ["move", createdTaskId, "--toStatus", "STARTED", "--expectedVersion", `${createdVersion}`],
@@ -197,10 +198,40 @@ test("cli e2e emits json by default and maps not-found/conflict exit codes", asy
     assert.equal(staleMovePayload.ok, false);
     assert.equal(staleMovePayload.error.code, "VERSION_CONFLICT");
 
-    // Contract: Not found maps to exit code 3.
+    const missingExpectedVersionDelete = runCli(
+      ["delete", createdTaskId],
+      apiBaseUrl,
+    );
+    assert.equal(missingExpectedVersionDelete.status, 2, missingExpectedVersionDelete.stderr);
+    const missingExpectedVersionDeletePayload = parseJsonStdout(
+      missingExpectedVersionDelete,
+      "delete missing expectedVersion",
+    );
+    assert.equal(missingExpectedVersionDeletePayload.ok, false);
+    assert.equal(missingExpectedVersionDeletePayload.error.code, "VALIDATION_ERROR");
+
+    const staleDelete = runCli(
+      ["delete", createdTaskId, "--expectedVersion", `${createdVersion}`],
+      apiBaseUrl,
+    );
+    assert.equal(staleDelete.status, 4, staleDelete.stderr);
+    const staleDeletePayload = parseJsonStdout(staleDelete, "stale delete");
+    assert.equal(staleDeletePayload.ok, false);
+    assert.equal(staleDeletePayload.error.code, "VERSION_CONFLICT");
+
+    const deleted = runCli(
+      ["delete", createdTaskId, "--expectedVersion", `${updatedVersion}`],
+      apiBaseUrl,
+    );
+    assert.equal(deleted.status, 0, deleted.stderr);
+    const deletedPayload = parseJsonStdout(deleted, "delete");
+    assert.equal(deletedPayload.ok, true);
+    assert.equal(deletedPayload.data.id, createdTaskId);
+
+    // Contract: deleted task maps show to exit code 3.
     const missing = runCli([
       "show",
-      "missing_task_id",
+      createdTaskId,
     ], apiBaseUrl);
 
     assert.equal(missing.status, 3, missing.stderr);

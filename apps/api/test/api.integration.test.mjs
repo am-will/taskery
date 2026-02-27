@@ -122,6 +122,24 @@ test("GET /api/health returns status ok", async () => {
   assert.deepEqual(body, { status: "ok" });
 });
 
+test("CORS allows loopback dev origins on non-default ports", async () => {
+  const origin = "http://127.0.0.1:3012";
+  const preflight = await fetch(`${baseUrl}/api/tasks`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: origin,
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "content-type",
+    },
+  });
+
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+  assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /POST/);
+  assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /DELETE/);
+  assert.match(preflight.headers.get("access-control-allow-headers") ?? "", /content-type/i);
+});
+
 test("POST /api/tasks creates a task and GET /api/tasks lists it", async () => {
   const task = await createTask({
     title: "Create + list coverage",
@@ -206,6 +224,69 @@ test("POST /api/tasks/:id/move returns 409 conflict for stale expectedVersion", 
   });
 });
 
+test("DELETE /api/tasks/:id deletes a task with expectedVersion", async () => {
+  const task = await createTask({ title: "Delete me" });
+
+  const { response, body } = await requestJson(`/api/tasks/${task.id}`, {
+    method: "DELETE",
+    body: JSON.stringify({
+      expectedVersion: task.version,
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.task.id, task.id);
+  assert.equal(body.task.version, task.version);
+
+  const listResult = await requestJson("/api/tasks");
+  assert.equal(listResult.response.status, 200);
+  assert.equal(listResult.body.tasks.length, 0);
+});
+
+test("DELETE /api/tasks/:id returns 409 conflict for stale expectedVersion", async () => {
+  const task = await createTask({ title: "Delete conflict path" });
+
+  const patchResult = await requestJson(`/api/tasks/${task.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      title: "Version bump before delete",
+      expectedVersion: task.version,
+    }),
+  });
+  assert.equal(patchResult.response.status, 200);
+
+  const { response, body } = await requestJson(`/api/tasks/${task.id}`, {
+    method: "DELETE",
+    body: JSON.stringify({
+      expectedVersion: task.version,
+    }),
+  });
+
+  assert.equal(response.status, 409);
+  assert.equal(body.code, "VERSION_CONFLICT");
+  assert.match(body.message, /stale expectedVersion/);
+  assert.deepEqual(body.details, {
+    expectedVersion: 1,
+    actualVersion: 2,
+  });
+});
+
+test("DELETE /api/tasks/:id validates expectedVersion before persistence checks", async () => {
+  const task = await createTask({ title: "Delete validation path" });
+
+  const { response, body } = await requestJson(`/api/tasks/${task.id}`, {
+    method: "DELETE",
+    body: JSON.stringify({}),
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(body.code, "VALIDATION_ERROR");
+  assert.match(body.message, /expectedVersion is required/);
+
+  const dbTask = await prisma.task.findUnique({ where: { id: task.id } });
+  assert.notEqual(dbTask, null);
+});
+
 test("task endpoints return 404 TASK_NOT_FOUND for missing task ids", async () => {
   const missingTaskId = "task_does_not_exist";
 
@@ -232,4 +313,15 @@ test("task endpoints return 404 TASK_NOT_FOUND for missing task ids", async () =
   assert.equal(moveResult.response.status, 404);
   assert.equal(moveResult.body.code, "TASK_NOT_FOUND");
   assert.match(moveResult.body.message, /task_does_not_exist/);
+
+  const deleteResult = await requestJson(`/api/tasks/${missingTaskId}`, {
+    method: "DELETE",
+    body: JSON.stringify({
+      expectedVersion: 1,
+    }),
+  });
+
+  assert.equal(deleteResult.response.status, 404);
+  assert.equal(deleteResult.body.code, "TASK_NOT_FOUND");
+  assert.match(deleteResult.body.message, /task_does_not_exist/);
 });

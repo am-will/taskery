@@ -129,6 +129,10 @@ type TaskMoveInput = {
   expectedVersion: number;
 };
 
+type TaskDeleteInput = {
+  expectedVersion: number;
+};
+
 const STATUS_SET = new Set<string>(TASK_STATUS_VALUES);
 const PRIORITY_SET = new Set<string>(TASK_PRIORITY_VALUES);
 
@@ -318,8 +322,26 @@ export const taskMoveInputSchema: Schema<TaskMoveInput> = {
   },
 };
 
+export const taskDeleteInputSchema: Schema<TaskDeleteInput> = {
+  parse(input: unknown): TaskDeleteInput {
+    const object = expectObject(input);
+
+    if (object.expectedVersion === undefined) {
+      throw new Error("expectedVersion is required");
+    }
+    if (typeof object.expectedVersion !== "number") {
+      throw new Error("expectedVersion must be a number");
+    }
+
+    return {
+      expectedVersion: normalizeVersion(object.expectedVersion),
+    };
+  },
+};
+
 export type {
   TaskCreateInput,
+  TaskDeleteInput,
   TaskMoveInput,
   TaskUpdateInput,
 };
