@@ -173,6 +173,135 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  position: relative;
+}
+
+.board-actions {
+  position: relative;
+}
+
+.options-toggle {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.32rem 0.55rem;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 180ms ease, color 180ms ease, background 180ms ease;
+}
+
+.options-toggle:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  color: var(--text-primary);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.options-menu {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  z-index: 45;
+  width: min(23rem, 88vw);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.7rem;
+  background: rgba(20, 24, 31, 0.96);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+}
+
+.options-form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.options-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.options-checkbox {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem;
+  letter-spacing: 0.04em !important;
+}
+
+.options-checkbox input {
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: 0;
+}
+
+.options-form input,
+.options-form select {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.76rem;
+  padding: 0.4rem 0.52rem;
+}
+
+.options-form input:focus,
+.options-form select:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.options-meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+}
+
+.options-error {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.options-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.options-actions button {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.33rem 0.58rem;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.options-actions button:last-child {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.options-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ── Sync Indicator (dot + text) ── */
@@ -901,6 +1030,11 @@ body {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+  }
+
+  .options-menu {
+    left: 0;
+    right: auto;
   }
 
   .task-form,

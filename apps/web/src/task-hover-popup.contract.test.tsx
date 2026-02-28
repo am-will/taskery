@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { App } from "./App";
 
 const jsonResponse = (tasks: unknown[]) =>
@@ -35,16 +35,24 @@ describe("task hover popup contract", () => {
 
     render(<App />);
 
-    const card = await screen.findByTestId("task-card-task-1");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const card = screen.getByTestId("task-card-task-1");
     fireEvent.mouseEnter(card);
 
     expect(screen.queryByTestId("task-hover-popup-task-1")).toBeNull();
 
-    vi.advanceTimersByTime(499);
+    await act(async () => {
+      vi.advanceTimersByTime(499);
+    });
     expect(screen.queryByTestId("task-hover-popup-task-1")).toBeNull();
 
-    vi.advanceTimersByTime(1);
-    const popup = await screen.findByTestId("task-hover-popup-task-1");
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+    const popup = screen.getByTestId("task-hover-popup-task-1");
     const popupQueries = within(popup);
     expect(popupQueries.getByText("Task Details")).toBeTruthy();
     expect(popupQueries.getByText("Title")).toBeTruthy();
@@ -58,8 +66,9 @@ describe("task hover popup contract", () => {
     expect(popupQueries.getByText("Include timeline and owner mapping")).toBeTruthy();
 
     fireEvent.mouseLeave(card);
-    await waitFor(() => {
-      expect(screen.queryByTestId("task-hover-popup-task-1")).toBeNull();
+    await act(async () => {
+      await Promise.resolve();
     });
+    expect(screen.queryByTestId("task-hover-popup-task-1")).toBeNull();
   });
 });

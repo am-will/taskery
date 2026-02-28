@@ -1,8 +1,8 @@
 import { BOARD_STATUSES, type BoardState } from "../board/kanban-state";
-
-const REMINDER_WINDOW_MINUTES = 15;
-const DAILY_REMINDER_HOURS = [10, 13] as const;
-const WEEKLY_REMINDER_HOUR = 10;
+import {
+  DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
+  type NotificationScheduleConfig,
+} from "taskery-shared";
 const WEEKDAY_MONDAY = 1;
 
 export type ScheduledReminder = {
@@ -42,8 +42,8 @@ const listTitles = (titles: string[]): string => {
   return preview.join(", ");
 };
 
-const isInReminderWindow = (now: Date, hour: number): boolean =>
-  now.getHours() === hour && now.getMinutes() < REMINDER_WINDOW_MINUTES;
+const isInReminderWindow = (now: Date, hour: number, windowMinutes: number): boolean =>
+  now.getHours() === hour && now.getMinutes() < windowMinutes;
 
 const startOfWeekMonday = (now: Date): Date => {
   const start = new Date(now);
@@ -86,28 +86,39 @@ const listDueTaskTitles = (
 export const collectScheduledReminders = (
   board: BoardState,
   now: Date,
+  config: NotificationScheduleConfig = DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
 ): ScheduledReminder[] => {
+  if (!config.enabled) {
+    return [];
+  }
+
   const reminders: ScheduledReminder[] = [];
   const today = toLocalDateKey(now);
 
-  for (const hour of DAILY_REMINDER_HOURS) {
-    if (!isInReminderWindow(now, hour)) {
-      continue;
-    }
+  if (config.dailyEnabled) {
+    for (const hour of config.dailyHours) {
+      if (!isInReminderWindow(now, hour, config.windowMinutes)) {
+        continue;
+      }
 
-    const dueTodayTitles = listDueTaskTitles(board, (dueDate) => dueDate === today);
-    if (dueTodayTitles.length === 0) {
-      continue;
-    }
+      const dueTodayTitles = listDueTaskTitles(board, (dueDate) => dueDate === today);
+      if (dueTodayTitles.length === 0) {
+        continue;
+      }
 
-    reminders.push({
-      dedupeKey: `daily:${today}:${hour}`,
-      title: `Taskery due-today reminder (${hour === 10 ? "10:00" : "13:00"})`,
-      body: `${dueTodayTitles.length} task${dueTodayTitles.length === 1 ? "" : "s"} due today: ${listTitles(dueTodayTitles)}.`,
-    });
+      reminders.push({
+        dedupeKey: `daily:${today}:${hour}`,
+        title: `Taskery due-today reminder (${String(hour).padStart(2, "0")}:00)`,
+        body: `${dueTodayTitles.length} task${dueTodayTitles.length === 1 ? "" : "s"} due today: ${listTitles(dueTodayTitles)}.`,
+      });
+    }
   }
 
-  if (now.getDay() !== WEEKDAY_MONDAY || !isInReminderWindow(now, WEEKLY_REMINDER_HOUR)) {
+  if (
+    !config.weeklyEnabled ||
+    now.getDay() !== config.weeklyDay ||
+    !isInReminderWindow(now, config.weeklyHour, config.windowMinutes)
+  ) {
     return reminders;
   }
 
@@ -124,8 +135,8 @@ export const collectScheduledReminders = (
   }
 
   reminders.push({
-    dedupeKey: `weekly:${mondayKey}:${WEEKLY_REMINDER_HOUR}`,
-    title: "Taskery weekly due-date reminder (Monday 10:00)",
+    dedupeKey: `weekly:${mondayKey}:${config.weeklyDay}:${config.weeklyHour}`,
+    title: `Taskery weekly due-date reminder (${String(config.weeklyHour).padStart(2, "0")}:00)`,
     body: `${dueThisWeekTitles.length} task${dueThisWeekTitles.length === 1 ? "" : "s"} due this week: ${listTitles(dueThisWeekTitles)}.`,
   });
 

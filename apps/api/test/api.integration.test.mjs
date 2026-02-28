@@ -74,6 +74,19 @@ before(async () => {
 beforeEach(async () => {
   await prisma.taskEvent.deleteMany();
   await prisma.task.deleteMany();
+  await prisma.notificationSettings.deleteMany();
+  await prisma.notificationSettings.create({
+    data: {
+      id: "global",
+      enabled: true,
+      dailyEnabled: true,
+      dailyHoursCsv: "10,13",
+      weeklyEnabled: true,
+      weeklyDay: 1,
+      weeklyHour: 10,
+      windowMinutes: 15,
+    },
+  });
 });
 
 after(async () => {
@@ -135,6 +148,57 @@ test("GET /api/health returns status ok", async () => {
   assert.deepEqual(body, { status: "ok" });
 });
 
+test("GET /api/settings/notifications returns persisted defaults", async () => {
+  const { response, body } = await requestJson("/api/settings/notifications");
+
+  assert.equal(response.status, 200);
+  assert.equal(body.settings.enabled, true);
+  assert.equal(body.settings.dailyEnabled, true);
+  assert.deepEqual(body.settings.dailyHours, [10, 13]);
+  assert.equal(body.settings.weeklyEnabled, true);
+  assert.equal(body.settings.weeklyDay, 1);
+  assert.equal(body.settings.weeklyHour, 10);
+  assert.equal(body.settings.windowMinutes, 15);
+});
+
+test("PATCH /api/settings/notifications updates settings", async () => {
+  const { response, body } = await requestJson("/api/settings/notifications", {
+    method: "PATCH",
+    body: JSON.stringify({
+      enabled: false,
+      dailyHours: [9, 14],
+      weeklyDay: 3,
+      weeklyHour: 16,
+      windowMinutes: 10,
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.settings.enabled, false);
+  assert.deepEqual(body.settings.dailyHours, [9, 14]);
+  assert.equal(body.settings.weeklyDay, 3);
+  assert.equal(body.settings.weeklyHour, 16);
+  assert.equal(body.settings.windowMinutes, 10);
+
+  const fromDb = await prisma.notificationSettings.findUnique({ where: { id: "global" } });
+  assert.notEqual(fromDb, null);
+  assert.equal(fromDb.dailyHoursCsv, "9,14");
+  assert.equal(fromDb.weeklyDay, 3);
+});
+
+test("PATCH /api/settings/notifications validates payloads", async () => {
+  const { response, body } = await requestJson("/api/settings/notifications", {
+    method: "PATCH",
+    body: JSON.stringify({
+      weeklyHour: 24,
+    }),
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(body.code, "VALIDATION_ERROR");
+  assert.match(body.message, /weeklyHour must be between 0 and 23/);
+});
+
 test("CORS allows loopback dev origins on non-default ports", async () => {
   const origin = "http://127.0.0.1:3012";
   const preflight = await fetch(`${baseUrl}/api/tasks`, {
@@ -169,6 +233,8 @@ test("POST /api/tasks creates a task and GET /api/tasks lists it", async () => {
   assert.equal(body.tasks.length, 1);
   assert.equal(body.tasks[0].id, task.id);
   assert.equal(body.tasks[0].title, "Create + list coverage");
+  assert.equal(body.notificationSettings.enabled, true);
+  assert.deepEqual(body.notificationSettings.dailyHours, [10, 13]);
 });
 
 test("PATCH /api/tasks/:id updates a task successfully", async () => {

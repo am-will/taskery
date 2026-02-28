@@ -1,4 +1,9 @@
-import { ERROR_CODES, type Task, type TaskErrorCode } from "taskery-shared";
+import {
+  ERROR_CODES,
+  type NotificationSettings,
+  type Task,
+  type TaskErrorCode,
+} from "taskery-shared";
 
 const EXIT_CODE_SUCCESS = 0;
 const EXIT_CODE_INTERNAL = 1;
@@ -8,7 +13,7 @@ const EXIT_CODE_CONFLICT = 4;
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
 
-type CommandName = "create" | "list" | "show" | "update" | "move" | "delete";
+type CommandName = "create" | "list" | "show" | "update" | "move" | "delete" | "settings";
 
 type ParsedArgs = {
   json: boolean;
@@ -52,6 +57,10 @@ type ApiTasksResponse = {
 
 type ApiTaskResponse = {
   task: Task;
+};
+
+type ApiNotificationSettingsResponse = {
+  settings: NotificationSettings;
 };
 
 function resolveApiBaseUrl(): string {
@@ -126,7 +135,8 @@ function isCommandName(value: string): value is CommandName {
     value === "show" ||
     value === "update" ||
     value === "move" ||
-    value === "delete"
+    value === "delete" ||
+    value === "settings"
   );
 }
 
@@ -137,6 +147,7 @@ const ACTION_FLAG_MAPPINGS: ActionFlagMapping[] = [
   { flag: "update", command: "update", positionalName: "task id" },
   { flag: "move", command: "move", positionalName: "task id" },
   { flag: "delete", command: "delete", positionalName: "task id" },
+  { flag: "settings", command: "settings", positionalName: "unused" },
 ];
 
 function normalizeActionFlagCommand(parsed: ParsedArgs): CliFailure | null {
@@ -165,7 +176,7 @@ function normalizeActionFlagCommand(parsed: ParsedArgs): CliFailure | null {
   const rawValue = parsed.flags.get(selected.flag);
   if (typeof rawValue === "string") {
     parsed.positional.unshift(rawValue);
-  } else if (rawValue === true && selected.command !== "list") {
+  } else if (rawValue === true && selected.command !== "list" && selected.command !== "settings") {
     const implicitValue = readStringFlag(parsed.flags, "id");
     if (implicitValue === undefined && selected.command !== "create") {
       return toCliFailure(
@@ -195,6 +206,7 @@ function buildHelpText(): string {
     "  update <taskId>   Update a task",
     "  move <taskId>     Move task to another status",
     "  delete <taskId>   Delete a task",
+    "  settings          Show or update notification settings",
     "",
     "Global Flags:",
     "  --json   Emit machine-readable JSON output (default)",
@@ -203,6 +215,7 @@ function buildHelpText(): string {
     "",
     "Action Flags:",
     "  --create | --list | --show | --update | --move | --delete",
+    "  --settings",
     "",
     "Command Flags:",
     "  create:",
@@ -236,6 +249,15 @@ function buildHelpText(): string {
     "  delete:",
     "    --id <taskId>        Alternate for positional <taskId>",
     "    --expectedVersion <int> Required",
+    "  settings:",
+    "    No flags: fetch current notification settings",
+    "    --enabled <bool>",
+    "    --dailyEnabled <bool>",
+    "    --dailyHours <csv-hours> (example: 10,13)",
+    "    --weeklyEnabled <bool>",
+    "    --weeklyDay <0-6> (0=Sunday, 1=Monday)",
+    "    --weeklyHour <0-23>",
+    "    --windowMinutes <1-60>",
     "",
     "Allowed Values:",
     "  STATUS = PENDING | STARTED | BLOCKED | REVIEW | COMPLETE",
@@ -302,6 +324,74 @@ function parseIntegerFlag(
       `Flag --${name} must be an integer`,
       EXIT_CODE_VALIDATION,
     );
+  }
+
+  return parsed;
+}
+
+function parseBooleanFlag(
+  flags: Map<string, string | boolean>,
+  name: string,
+): boolean | CliFailure | undefined {
+  const raw = flags.get(name);
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (raw === true) {
+    return true;
+  }
+  if (raw === false) {
+    return false;
+  }
+
+  const normalized = raw.toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on") {
+    return true;
+  }
+  if (normalized === "false" || normalized === "0" || normalized === "no" || normalized === "off") {
+    return false;
+  }
+
+  return toCliFailure(
+    ERROR_CODES.VALIDATION_ERROR,
+    `Flag --${name} must be a boolean (true/false)`,
+    EXIT_CODE_VALIDATION,
+  );
+}
+
+function parseIntegerListFlag(
+  flags: Map<string, string | boolean>,
+  name: string,
+): number[] | CliFailure | undefined {
+  const raw = readStringFlag(flags, name);
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  const entries = raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  if (entries.length === 0) {
+    return toCliFailure(
+      ERROR_CODES.VALIDATION_ERROR,
+      `Flag --${name} must include at least one integer value`,
+      EXIT_CODE_VALIDATION,
+    );
+  }
+
+  const parsed: number[] = [];
+  for (const entry of entries) {
+    const numeric = Number(entry);
+    if (!Number.isInteger(numeric)) {
+      return toCliFailure(
+        ERROR_CODES.VALIDATION_ERROR,
+        `Flag --${name} must be a comma-separated list of integers`,
+        EXIT_CODE_VALIDATION,
+      );
+    }
+    parsed.push(numeric);
   }
 
   return parsed;
@@ -447,6 +537,9 @@ function formatTextSuccess(value: unknown): string {
     }
     return value.map((task) => formatTask(task)).join("\n\n");
   }
+  if (isNotificationSettings(value)) {
+    return formatNotificationSettings(value);
+  }
   if (typeof value === "string") {
     return value;
   }
@@ -459,6 +552,20 @@ function isTask(value: unknown): value is Task {
 
 function isTaskList(value: unknown): value is Task[] {
   return Array.isArray(value) && value.every((entry) => isTask(entry));
+}
+
+function isNotificationSettings(value: unknown): value is NotificationSettings {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "enabled" in value &&
+    "dailyEnabled" in value &&
+    "dailyHours" in value &&
+    "weeklyEnabled" in value &&
+    "weeklyDay" in value &&
+    "weeklyHour" in value &&
+    "windowMinutes" in value
+  );
 }
 
 function formatTask(task: Task): string {
@@ -474,6 +581,20 @@ function formatTask(task: Task): string {
     `notes: ${task.notes ?? "null"}`,
     `createdAt: ${task.createdAt}`,
     `updatedAt: ${task.updatedAt}`,
+  ];
+  return lines.join("\n");
+}
+
+function formatNotificationSettings(settings: NotificationSettings): string {
+  const lines = [
+    `enabled: ${settings.enabled}`,
+    `dailyEnabled: ${settings.dailyEnabled}`,
+    `dailyHours: ${settings.dailyHours.join(",")}`,
+    `weeklyEnabled: ${settings.weeklyEnabled}`,
+    `weeklyDay: ${settings.weeklyDay}`,
+    `weeklyHour: ${settings.weeklyHour}`,
+    `windowMinutes: ${settings.windowMinutes}`,
+    `updatedAt: ${settings.updatedAt ?? "null"}`,
   ];
   return lines.join("\n");
 }
@@ -743,8 +864,92 @@ async function runDelete(
   return { ok: true, value: response.value.task };
 }
 
-function isCliFailure(value: number | CliFailure | undefined): value is CliFailure {
-  return typeof value === "object" && value !== null && value.ok === false;
+async function runSettings(
+  baseUrl: string,
+  flags: Map<string, string | boolean>,
+): Promise<CliResult> {
+  const enabled = parseBooleanFlag(flags, "enabled");
+  if (isCliFailure(enabled)) {
+    return enabled;
+  }
+  const dailyEnabled = parseBooleanFlag(flags, "dailyEnabled");
+  if (isCliFailure(dailyEnabled)) {
+    return dailyEnabled;
+  }
+  const weeklyEnabled = parseBooleanFlag(flags, "weeklyEnabled");
+  if (isCliFailure(weeklyEnabled)) {
+    return weeklyEnabled;
+  }
+
+  const dailyHours = parseIntegerListFlag(flags, "dailyHours");
+  if (isCliFailure(dailyHours)) {
+    return dailyHours;
+  }
+  const weeklyDay = parseIntegerFlag(flags, "weeklyDay");
+  if (isCliFailure(weeklyDay)) {
+    return weeklyDay;
+  }
+  const weeklyHour = parseIntegerFlag(flags, "weeklyHour");
+  if (isCliFailure(weeklyHour)) {
+    return weeklyHour;
+  }
+  const windowMinutes = parseIntegerFlag(flags, "windowMinutes");
+  if (isCliFailure(windowMinutes)) {
+    return windowMinutes;
+  }
+
+  const updateBody: Record<string, unknown> = {};
+  if (enabled !== undefined) {
+    updateBody.enabled = enabled;
+  }
+  if (dailyEnabled !== undefined) {
+    updateBody.dailyEnabled = dailyEnabled;
+  }
+  if (dailyHours !== undefined) {
+    updateBody.dailyHours = dailyHours;
+  }
+  if (weeklyEnabled !== undefined) {
+    updateBody.weeklyEnabled = weeklyEnabled;
+  }
+  if (weeklyDay !== undefined) {
+    updateBody.weeklyDay = weeklyDay;
+  }
+  if (weeklyHour !== undefined) {
+    updateBody.weeklyHour = weeklyHour;
+  }
+  if (windowMinutes !== undefined) {
+    updateBody.windowMinutes = windowMinutes;
+  }
+
+  if (Object.keys(updateBody).length === 0) {
+    const readResponse = await callApi<ApiNotificationSettingsResponse>(
+      baseUrl,
+      "GET",
+      "/api/settings/notifications",
+    );
+    if (!readResponse.ok) {
+      return readResponse.failure;
+    }
+    return { ok: true, value: readResponse.value.settings };
+  }
+
+  const updateResponse = await callApi<ApiNotificationSettingsResponse>(
+    baseUrl,
+    "PATCH",
+    "/api/settings/notifications",
+    updateBody,
+  );
+  if (!updateResponse.ok) {
+    return updateResponse.failure;
+  }
+  return { ok: true, value: updateResponse.value.settings };
+}
+
+function isCliFailure(value: unknown): value is CliFailure {
+  if (typeof value !== "object" || value === null || !("ok" in value)) {
+    return false;
+  }
+  return value.ok === false;
 }
 
 export async function runTaskboardCli(argv: string[] = process.argv.slice(2)): Promise<number> {
@@ -787,6 +992,9 @@ export async function runTaskboardCli(argv: string[] = process.argv.slice(2)): P
       break;
     case "delete":
       result = await runDelete(baseUrl, parsed.positional, parsed.flags);
+      break;
+    case "settings":
+      result = await runSettings(baseUrl, parsed.flags);
       break;
   }
 

@@ -178,6 +178,34 @@ test("cli e2e emits json by default and maps not-found/conflict exit codes", asy
   try {
     await waitForHealthyApi(apiBaseUrl, apiProc, apiLogs);
 
+    const initialSettings = runCli(["settings"], apiBaseUrl);
+    assert.equal(initialSettings.status, 0, initialSettings.stderr);
+    const initialSettingsPayload = parseJsonStdout(initialSettings, "settings read");
+    assert.equal(initialSettingsPayload.ok, true);
+    assert.deepEqual(initialSettingsPayload.data.dailyHours, [10, 13]);
+
+    const updatedSettings = runCli(
+      [
+        "settings",
+        "--enabled",
+        "false",
+        "--dailyHours",
+        "9,14",
+        "--weeklyDay",
+        "2",
+        "--weeklyHour",
+        "11",
+      ],
+      apiBaseUrl,
+    );
+    assert.equal(updatedSettings.status, 0, updatedSettings.stderr);
+    const updatedSettingsPayload = parseJsonStdout(updatedSettings, "settings update");
+    assert.equal(updatedSettingsPayload.ok, true);
+    assert.equal(updatedSettingsPayload.data.enabled, false);
+    assert.deepEqual(updatedSettingsPayload.data.dailyHours, [9, 14]);
+    assert.equal(updatedSettingsPayload.data.weeklyDay, 2);
+    assert.equal(updatedSettingsPayload.data.weeklyHour, 11);
+
     const created = runCli(["create", "CLI e2e seed"], apiBaseUrl);
     assert.equal(created.status, 0, created.stderr);
     const createdPayload = parseJsonStdout(created, "create");

@@ -27,6 +27,11 @@ import {
   moveTaskCard,
 } from "./board/kanban-state";
 import { collectScheduledReminders } from "./notifications/reminders";
+import {
+  DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
+  notificationScheduleConfigSchema,
+  type NotificationSettings,
+} from "taskery-shared";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
 const REFRESH_INTERVAL_MS = 5000;
@@ -112,6 +117,22 @@ type ApiTaskListItem = {
 
 type ApiTaskListResponse = {
   tasks?: unknown;
+  notificationSettings?: unknown;
+};
+
+type BoardSnapshot = {
+  board: BoardState;
+  notificationSettings: NotificationSettings;
+};
+
+type NotificationSettingsDraft = {
+  enabled: boolean;
+  dailyEnabled: boolean;
+  dailyHoursText: string;
+  weeklyEnabled: boolean;
+  weeklyDayText: string;
+  weeklyHourText: string;
+  windowMinutesText: string;
 };
 
 type TaskRecord = {
@@ -143,6 +164,40 @@ type StatusTransitionCandidate = {
   toIndex: number;
   nextTask: BoardTask;
 };
+
+const WEEKDAY_OPTIONS = [
+  { value: "0", label: "Sunday" },
+  { value: "1", label: "Monday" },
+  { value: "2", label: "Tuesday" },
+  { value: "3", label: "Wednesday" },
+  { value: "4", label: "Thursday" },
+  { value: "5", label: "Friday" },
+  { value: "6", label: "Saturday" },
+] as const;
+
+const createDefaultNotificationSettings = (): NotificationSettings => ({
+  ...DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
+  dailyHours: [...DEFAULT_NOTIFICATION_SCHEDULE_CONFIG.dailyHours],
+  updatedAt: null,
+});
+
+const toNotificationSettingsDraft = (
+  settings: NotificationSettings,
+): NotificationSettingsDraft => ({
+  enabled: settings.enabled,
+  dailyEnabled: settings.dailyEnabled,
+  dailyHoursText: settings.dailyHours.join(","),
+  weeklyEnabled: settings.weeklyEnabled,
+  weeklyDayText: String(settings.weeklyDay),
+  weeklyHourText: String(settings.weeklyHour),
+  windowMinutesText: String(settings.windowMinutes),
+});
+
+const sortUniqueHours = (hours: number[]): number[] =>
+  Array.from(new Set(hours)).sort((left, right) => left - right);
+
+const sameNumberArray = (left: number[], right: number[]): boolean =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
 
 const findTaskLocation = (board: BoardState, taskId: string) => {
   for (const status of BOARD_STATUSES) {
@@ -320,6 +375,68 @@ const parseNullableString = (value: unknown): string | null => {
   return typeof value === "string" ? value : null;
 };
 
+const parseApiNotificationSettings = (value: unknown): NotificationSettings => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return createDefaultNotificationSettings();
+  }
+
+  const record = value as Record<string, unknown>;
+  try {
+    const schedule = notificationScheduleConfigSchema.parse({
+      enabled: record.enabled,
+      dailyEnabled: record.dailyEnabled,
+      dailyHours: record.dailyHours,
+      weeklyEnabled: record.weeklyEnabled,
+      weeklyDay: record.weeklyDay,
+      weeklyHour: record.weeklyHour,
+      windowMinutes: record.windowMinutes,
+    });
+    return {
+      ...schedule,
+      updatedAt: parseNullableString(record.updatedAt),
+    };
+  } catch {
+    return createDefaultNotificationSettings();
+  }
+};
+
+const parseDailyHoursText = (value: string): number[] | null => {
+  const entries = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const parsed: number[] = [];
+  for (const entry of entries) {
+    const hour = Number(entry);
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+      return null;
+    }
+    parsed.push(hour);
+  }
+
+  return sortUniqueHours(parsed);
+};
+
+const parseBoundedIntegerText = (
+  value: string,
+  minimum: number,
+  maximum: number,
+): number | null => {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    return null;
+  }
+  return parsed;
+};
+
 const parseApiPriority = (value: unknown): ApiTaskPriority => {
   if (value === "LOW" || value === "MEDIUM" || value === "HIGH" || value === "URGENT") {
     return value;
@@ -400,7 +517,7 @@ const getApiBaseUrl = (): string => {
   return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 };
 
-const fetchBoardSnapshot = async (): Promise<BoardState> => {
+const fetchBoardSnapshot = async (): Promise<BoardSnapshot> => {
   const response = await fetch(`${getApiBaseUrl()}/api/tasks`);
   if (!response.ok) {
     throw new Error(`Task refresh failed with status ${response.status}`);
@@ -414,7 +531,10 @@ const fetchBoardSnapshot = async (): Promise<BoardState> => {
   const parsedTasks = payload.tasks
     .map((entry) => parseApiTask(entry))
     .filter((entry): entry is ApiTaskListItem => entry !== null);
-  return toBoardStateFromApiTasks(parsedTasks);
+  return {
+    board: toBoardStateFromApiTasks(parsedTasks),
+    notificationSettings: parseApiNotificationSettings(payload.notificationSettings),
+  };
 };
 
 const BORDER_THEMES = ["rainbow", "yellow", "blue", "red", "indigo", "green", "off"] as const;
@@ -716,12 +836,24 @@ export function App() {
   const [editTaskDraft, setEditTaskDraft] = useState(defaultEditTaskDraft);
   const [syncStatus, setSyncStatus] = useState<BoardSyncStatus>("syncing");
   const [borderTheme, setBorderTheme] = useState<BorderTheme>("rainbow");
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(
+    createDefaultNotificationSettings,
+  );
+  const [settingsDraft, setSettingsDraft] = useState<NotificationSettingsDraft>(() =>
+    toNotificationSettingsDraft(createDefaultNotificationSettings()),
+  );
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingTaskIds, setDeletingTaskIds] = useState<Set<string>>(new Set());
   const refreshPromiseRef = useRef<Promise<void> | null>(null);
   const reminderDedupeRef = useRef<Set<string>>(new Set());
   const boardRef = useRef<BoardState>(createEmptyBoardState());
+  const notificationSettingsRef = useRef<NotificationSettings>(createDefaultNotificationSettings());
+  const isOptionsOpenRef = useRef(false);
+  const isSavingSettingsRef = useRef(false);
   const isDisposedRef = useRef(false);
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -745,6 +877,11 @@ export function App() {
       boardRef.current = nextBoard;
       return nextBoard;
     });
+  };
+
+  const applyNotificationSettings = (nextSettings: NotificationSettings) => {
+    notificationSettingsRef.current = nextSettings;
+    setNotificationSettings(nextSettings);
   };
 
   const waitForDelay = (durationMs: number): Promise<void> =>
@@ -771,9 +908,11 @@ export function App() {
   };
 
   const triggerScheduledReminders = (snapshotBoard: BoardState): void => {
-    const pendingReminders = collectScheduledReminders(snapshotBoard, new Date()).filter(
-      (reminder) => !hasReminderFired(reminder.dedupeKey),
-    );
+    const pendingReminders = collectScheduledReminders(
+      snapshotBoard,
+      new Date(),
+      notificationSettingsRef.current,
+    ).filter((reminder) => !hasReminderFired(reminder.dedupeKey));
     if (pendingReminders.length === 0) {
       return;
     }
@@ -856,9 +995,13 @@ export function App() {
 
     const refreshPromise = (async () => {
       try {
-        const refreshedBoard = await fetchBoardSnapshot();
-        await applyRefreshedBoard(refreshedBoard);
-        triggerScheduledReminders(refreshedBoard);
+        const snapshot = await fetchBoardSnapshot();
+        applyNotificationSettings(snapshot.notificationSettings);
+        if (!isOptionsOpenRef.current && !isSavingSettingsRef.current) {
+          setSettingsDraft(toNotificationSettingsDraft(snapshot.notificationSettings));
+        }
+        await applyRefreshedBoard(snapshot.board);
+        triggerScheduledReminders(snapshot.board);
         setSyncStatus("synced");
       } catch {
         setSyncStatus("stale");
@@ -874,6 +1017,14 @@ export function App() {
   useEffect(() => {
     boardRef.current = board;
   }, [board]);
+
+  useEffect(() => {
+    isOptionsOpenRef.current = isOptionsOpen;
+  }, [isOptionsOpen]);
+
+  useEffect(() => {
+    isSavingSettingsRef.current = isSavingSettings;
+  }, [isSavingSettings]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -938,11 +1089,130 @@ export function App() {
     setEditTaskDraft((current) => ({ ...current, [field]: value }));
   };
 
+  const updateSettingsDraft = <K extends keyof NotificationSettingsDraft>(
+    field: K,
+    value: NotificationSettingsDraft[K],
+  ) => {
+    setSettingsDraft((current) => ({ ...current, [field]: value }));
+  };
+
   const cycleBorderTheme = () => {
     setBorderTheme((current) => {
       const idx = BORDER_THEMES.indexOf(current);
       return BORDER_THEMES[(idx + 1) % BORDER_THEMES.length] ?? "rainbow";
     });
+  };
+
+  const toggleOptionsMenu = () => {
+    setIsOptionsOpen((current) => {
+      const next = !current;
+      isOptionsOpenRef.current = next;
+      if (next) {
+        setSettingsError(null);
+        setSettingsDraft(toNotificationSettingsDraft(notificationSettingsRef.current));
+      }
+      return next;
+    });
+  };
+
+  const handleSaveNotificationSettings = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
+    event.preventDefault();
+    if (isSavingSettings) {
+      return;
+    }
+
+    const parsedDailyHours = parseDailyHoursText(settingsDraft.dailyHoursText);
+    if (parsedDailyHours === null) {
+      setSettingsError("Daily reminder hours must be comma-separated 0-23 values.");
+      return;
+    }
+
+    const parsedWeeklyDay = parseBoundedIntegerText(settingsDraft.weeklyDayText, 0, 6);
+    if (parsedWeeklyDay === null) {
+      setSettingsError("Weekly day must be a value from 0 (Sunday) to 6 (Saturday).");
+      return;
+    }
+
+    const parsedWeeklyHour = parseBoundedIntegerText(settingsDraft.weeklyHourText, 0, 23);
+    if (parsedWeeklyHour === null) {
+      setSettingsError("Weekly hour must be a value from 0 to 23.");
+      return;
+    }
+
+    const parsedWindowMinutes = parseBoundedIntegerText(settingsDraft.windowMinutesText, 1, 60);
+    if (parsedWindowMinutes === null) {
+      setSettingsError("Reminder window must be between 1 and 60 minutes.");
+      return;
+    }
+
+    const nextSettings = {
+      enabled: settingsDraft.enabled,
+      dailyEnabled: settingsDraft.dailyEnabled,
+      dailyHours: parsedDailyHours,
+      weeklyEnabled: settingsDraft.weeklyEnabled,
+      weeklyDay: parsedWeeklyDay,
+      weeklyHour: parsedWeeklyHour,
+      windowMinutes: parsedWindowMinutes,
+    };
+    const currentSettings = notificationSettingsRef.current;
+    const updatePayload: Record<string, unknown> = {};
+
+    if (nextSettings.enabled !== currentSettings.enabled) {
+      updatePayload.enabled = nextSettings.enabled;
+    }
+    if (nextSettings.dailyEnabled !== currentSettings.dailyEnabled) {
+      updatePayload.dailyEnabled = nextSettings.dailyEnabled;
+    }
+    if (!sameNumberArray(nextSettings.dailyHours, currentSettings.dailyHours)) {
+      updatePayload.dailyHours = nextSettings.dailyHours;
+    }
+    if (nextSettings.weeklyEnabled !== currentSettings.weeklyEnabled) {
+      updatePayload.weeklyEnabled = nextSettings.weeklyEnabled;
+    }
+    if (nextSettings.weeklyDay !== currentSettings.weeklyDay) {
+      updatePayload.weeklyDay = nextSettings.weeklyDay;
+    }
+    if (nextSettings.weeklyHour !== currentSettings.weeklyHour) {
+      updatePayload.weeklyHour = nextSettings.weeklyHour;
+    }
+    if (nextSettings.windowMinutes !== currentSettings.windowMinutes) {
+      updatePayload.windowMinutes = nextSettings.windowMinutes;
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      setSettingsError(null);
+      isOptionsOpenRef.current = false;
+      setIsOptionsOpen(false);
+      return;
+    }
+
+    isSavingSettingsRef.current = true;
+    setIsSavingSettings(true);
+    setSettingsError(null);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/settings/notifications`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(updatePayload),
+      });
+      if (!response.ok) {
+        throw new Error(`Settings update failed with status ${response.status}`);
+      }
+
+      const payload = (await response.json()) as { settings?: unknown };
+      const parsedSettings = parseApiNotificationSettings(payload.settings);
+      applyNotificationSettings(parsedSettings);
+      setSettingsDraft(toNotificationSettingsDraft(parsedSettings));
+      isOptionsOpenRef.current = false;
+      setIsOptionsOpen(false);
+    } catch {
+      setSettingsError("Unable to save notification settings. Please try again.");
+    } finally {
+      isSavingSettingsRef.current = false;
+      setIsSavingSettings(false);
+    }
   };
 
   const draggingTaskRecord = draggingTaskId ? findTaskRecord(board, draggingTaskId) : null;
@@ -1270,6 +1540,132 @@ export function App() {
             >
               {syncStatusMessage(syncStatus)}
             </span>
+            <div className="board-actions">
+              <button
+                type="button"
+                className="options-toggle"
+                onClick={toggleOptionsMenu}
+                aria-haspopup="dialog"
+                aria-expanded={isOptionsOpen}
+                aria-controls="notification-options"
+              >
+                Options
+              </button>
+              {isOptionsOpen ? (
+                <section
+                  id="notification-options"
+                  className="options-menu"
+                  role="dialog"
+                  aria-label="Notification options"
+                >
+                  <form className="options-form" onSubmit={handleSaveNotificationSettings}>
+                    <label className="options-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={settingsDraft.enabled}
+                        onChange={(event) =>
+                          updateSettingsDraft("enabled", event.target.checked)
+                        }
+                      />
+                      Enable desktop reminders
+                    </label>
+                    <label className="options-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={settingsDraft.dailyEnabled}
+                        onChange={(event) =>
+                          updateSettingsDraft("dailyEnabled", event.target.checked)
+                        }
+                      />
+                      Enable daily reminders
+                    </label>
+                    <label>
+                      Daily hours (comma-separated)
+                      <input
+                        type="text"
+                        value={settingsDraft.dailyHoursText}
+                        onChange={(event) =>
+                          updateSettingsDraft("dailyHoursText", event.target.value)
+                        }
+                        placeholder="10,13"
+                      />
+                    </label>
+                    <label className="options-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={settingsDraft.weeklyEnabled}
+                        onChange={(event) =>
+                          updateSettingsDraft("weeklyEnabled", event.target.checked)
+                        }
+                      />
+                      Enable weekly reminders
+                    </label>
+                    <label>
+                      Weekly day
+                      <select
+                        value={settingsDraft.weeklyDayText}
+                        onChange={(event) =>
+                          updateSettingsDraft("weeklyDayText", event.target.value)
+                        }
+                      >
+                        {WEEKDAY_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Weekly hour (0-23)
+                      <input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={settingsDraft.weeklyHourText}
+                        onChange={(event) =>
+                          updateSettingsDraft("weeklyHourText", event.target.value)
+                        }
+                      />
+                    </label>
+                    <label>
+                      Reminder window (minutes)
+                      <input
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={settingsDraft.windowMinutesText}
+                        onChange={(event) =>
+                          updateSettingsDraft("windowMinutesText", event.target.value)
+                        }
+                      />
+                    </label>
+                    <p className="options-meta">
+                      Last updated: {notificationSettings.updatedAt ?? "default settings"}
+                    </p>
+                    {settingsError ? (
+                      <p className="options-error" role="alert">
+                        {settingsError}
+                      </p>
+                    ) : null}
+                    <div className="options-actions">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          isOptionsOpenRef.current = false;
+                          setIsOptionsOpen(false);
+                        }}
+                        disabled={isSavingSettings}
+                      >
+                        Cancel
+                      </button>
+                      <button type="submit" disabled={isSavingSettings}>
+                        {isSavingSettings ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              ) : null}
+            </div>
             <button
               type="button"
               className={`theme-toggle theme-toggle-${borderTheme}`}

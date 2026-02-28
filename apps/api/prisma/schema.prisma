@@ -52,3 +52,15 @@ model TaskEvent {
 
   @@index([taskId, createdAt])
 }
+
+model NotificationSettings {
+  id            String   @id @default("global")
+  enabled       Boolean  @default(true)
+  dailyEnabled  Boolean  @default(true)
+  dailyHoursCsv String   @default("10,13")
+  weeklyEnabled Boolean  @default(true)
+  weeklyDay     Int      @default(1)
+  weeklyHour    Int      @default(10)
+  windowMinutes Int      @default(15)
+  updatedAt     DateTime @updatedAt
+}

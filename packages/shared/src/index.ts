@@ -16,6 +16,10 @@ export const POSITION_STEP = 1000;
 export const MIN_POSITION = POSITION_STEP;
 
 export const INITIAL_TASK_VERSION = 1;
+export const DEFAULT_REMINDER_WINDOW_MINUTES = 15;
+export const DEFAULT_DAILY_REMINDER_HOURS = [10, 13] as const;
+export const DEFAULT_WEEKLY_REMINDER_DAY = 1;
+export const DEFAULT_WEEKLY_REMINDER_HOUR = 10;
 
 export interface Task {
   id: string;
@@ -133,6 +137,40 @@ type TaskDeleteInput = {
   expectedVersion: number;
 };
 
+export type NotificationScheduleConfig = {
+  enabled: boolean;
+  dailyEnabled: boolean;
+  dailyHours: number[];
+  weeklyEnabled: boolean;
+  weeklyDay: number;
+  weeklyHour: number;
+  windowMinutes: number;
+};
+
+export type NotificationSettings = NotificationScheduleConfig & {
+  updatedAt: string | null;
+};
+
+type NotificationSettingsUpdateInput = {
+  enabled?: boolean;
+  dailyEnabled?: boolean;
+  dailyHours?: number[];
+  weeklyEnabled?: boolean;
+  weeklyDay?: number;
+  weeklyHour?: number;
+  windowMinutes?: number;
+};
+
+export const DEFAULT_NOTIFICATION_SCHEDULE_CONFIG: NotificationScheduleConfig = {
+  enabled: true,
+  dailyEnabled: true,
+  dailyHours: [...DEFAULT_DAILY_REMINDER_HOURS],
+  weeklyEnabled: true,
+  weeklyDay: DEFAULT_WEEKLY_REMINDER_DAY,
+  weeklyHour: DEFAULT_WEEKLY_REMINDER_HOUR,
+  windowMinutes: DEFAULT_REMINDER_WINDOW_MINUTES,
+};
+
 const STATUS_SET = new Set<string>(TASK_STATUS_VALUES);
 const PRIORITY_SET = new Set<string>(TASK_PRIORITY_VALUES);
 
@@ -225,6 +263,41 @@ function parseIsoDateString(value: unknown, field: string): string | null {
   }
 
   return value;
+}
+
+function parseIntegerRange(
+  value: unknown,
+  field: string,
+  minimum: number,
+  maximum: number,
+): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(`${field} must be an integer`);
+  }
+  if (value < minimum || value > maximum) {
+    throw new Error(`${field} must be between ${minimum} and ${maximum}`);
+  }
+  return value;
+}
+
+function parseBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`${field} must be a boolean`);
+  }
+  return value;
+}
+
+function parseDailyHours(value: unknown, field: string): number[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${field} must be an array of integers`);
+  }
+  if (value.length === 0) {
+    throw new Error(`${field} must contain at least one hour`);
+  }
+
+  const parsed = value.map((entry) => parseIntegerRange(entry, `${field}[]`, 0, 23));
+  const uniqueSorted = Array.from(new Set(parsed)).sort((left, right) => left - right);
+  return uniqueSorted;
 }
 
 export const taskCreateInputSchema: Schema<TaskCreateInput> = {
@@ -339,7 +412,58 @@ export const taskDeleteInputSchema: Schema<TaskDeleteInput> = {
   },
 };
 
+export const notificationScheduleConfigSchema: Schema<NotificationScheduleConfig> = {
+  parse(input: unknown): NotificationScheduleConfig {
+    const object = expectObject(input);
+    return {
+      enabled: parseBoolean(object.enabled, "enabled"),
+      dailyEnabled: parseBoolean(object.dailyEnabled, "dailyEnabled"),
+      dailyHours: parseDailyHours(object.dailyHours, "dailyHours"),
+      weeklyEnabled: parseBoolean(object.weeklyEnabled, "weeklyEnabled"),
+      weeklyDay: parseIntegerRange(object.weeklyDay, "weeklyDay", 0, 6),
+      weeklyHour: parseIntegerRange(object.weeklyHour, "weeklyHour", 0, 23),
+      windowMinutes: parseIntegerRange(object.windowMinutes, "windowMinutes", 1, 60),
+    };
+  },
+};
+
+export const notificationSettingsUpdateInputSchema: Schema<NotificationSettingsUpdateInput> = {
+  parse(input: unknown): NotificationSettingsUpdateInput {
+    const object = expectObject(input);
+    const output: NotificationSettingsUpdateInput = {};
+
+    if (object.enabled !== undefined) {
+      output.enabled = parseBoolean(object.enabled, "enabled");
+    }
+    if (object.dailyEnabled !== undefined) {
+      output.dailyEnabled = parseBoolean(object.dailyEnabled, "dailyEnabled");
+    }
+    if (object.dailyHours !== undefined) {
+      output.dailyHours = parseDailyHours(object.dailyHours, "dailyHours");
+    }
+    if (object.weeklyEnabled !== undefined) {
+      output.weeklyEnabled = parseBoolean(object.weeklyEnabled, "weeklyEnabled");
+    }
+    if (object.weeklyDay !== undefined) {
+      output.weeklyDay = parseIntegerRange(object.weeklyDay, "weeklyDay", 0, 6);
+    }
+    if (object.weeklyHour !== undefined) {
+      output.weeklyHour = parseIntegerRange(object.weeklyHour, "weeklyHour", 0, 23);
+    }
+    if (object.windowMinutes !== undefined) {
+      output.windowMinutes = parseIntegerRange(object.windowMinutes, "windowMinutes", 1, 60);
+    }
+
+    if (Object.keys(output).length === 0) {
+      throw new Error("settings update payload must include at least one field");
+    }
+
+    return output;
+  },
+};
+
 export type {
+  NotificationSettingsUpdateInput,
   TaskCreateInput,
   TaskDeleteInput,
   TaskMoveInput,

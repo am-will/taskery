@@ -64,6 +64,10 @@ Examples:
   - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts list | jq`
 - Create task:
   - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts create "Triage prod issue" --priority HIGH --status PENDING`
+- Read notification settings:
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts settings`
+- Update notification settings:
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts settings --dailyHours 9,14 --weeklyDay 2 --weeklyHour 11`
 - Update task with optimistic version check:
   - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts update <taskId> --title "Updated title" --expectedVersion <version>`
 - Move task:

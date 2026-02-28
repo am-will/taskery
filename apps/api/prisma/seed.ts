@@ -51,6 +51,29 @@ const seededTasks = [
 ];
 
 async function main(): Promise<void> {
+  await prisma.notificationSettings.upsert({
+    where: { id: "global" },
+    update: {
+      enabled: true,
+      dailyEnabled: true,
+      dailyHoursCsv: "10,13",
+      weeklyEnabled: true,
+      weeklyDay: 1,
+      weeklyHour: 10,
+      windowMinutes: 15,
+    },
+    create: {
+      id: "global",
+      enabled: true,
+      dailyEnabled: true,
+      dailyHoursCsv: "10,13",
+      weeklyEnabled: true,
+      weeklyDay: 1,
+      weeklyHour: 10,
+      windowMinutes: 15,
+    },
+  });
+
   for (const task of seededTasks) {
     await prisma.task.upsert({
       where: { id: task.id },

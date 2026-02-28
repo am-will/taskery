@@ -9,6 +9,7 @@ test("api entrypoint defines required route contracts", async () => {
 
   assert.match(source, /\/api\/health/);
   assert.match(source, /\/api\/tasks/);
+  assert.match(source, /\/api\/settings\/notifications/);
   assert.match(source, /\/api\/tasks\/:id\/move/);
   assert.match(source, /expectedVersion/);
   assert.match(source, /VERSION_CONFLICT|409/);

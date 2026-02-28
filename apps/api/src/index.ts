@@ -1,14 +1,24 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { PrismaClient, type Task as PrismaTask, type Prisma } from "@prisma/client";
 import {
+  PrismaClient,
+  type NotificationSettings as PrismaNotificationSettings,
+  type Task as PrismaTask,
+  type Prisma,
+} from "@prisma/client";
+import {
+  DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
   ERROR_CODES,
   buildTaskError,
   getNextPosition,
   isTransitionAllowed,
+  notificationScheduleConfigSchema,
+  notificationSettingsUpdateInputSchema,
   taskCreateInputSchema,
   taskDeleteInputSchema,
   taskMoveInputSchema,
   taskUpdateInputSchema,
+  type NotificationScheduleConfig,
+  type NotificationSettings,
   type Task,
   type TaskErrorCode,
   type TaskStatus,
@@ -22,6 +32,8 @@ const DEFAULT_CORS_ALLOWED_ORIGINS = [
 ];
 const TASK_ID_ROUTE_TEMPLATE = "/api/tasks/:id";
 const TASK_MOVE_ROUTE_TEMPLATE = "/api/tasks/:id/move";
+const NOTIFICATION_SETTINGS_ROUTE = "/api/settings/notifications";
+const NOTIFICATION_SETTINGS_ID = "global";
 const TASK_MUTATION_EVENT_TYPES = {
   TASK_CREATED: "TASK_CREATED",
   TASK_UPDATED: "TASK_UPDATED",
@@ -196,6 +208,139 @@ function toTaskEventSnapshot(record: PrismaTask): Record<string, unknown> {
   };
 }
 
+function parseDailyHoursCsv(value: string): number[] {
+  const rawHours = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .map((entry) => Number(entry));
+  const uniqueSorted = Array.from(new Set(rawHours)).sort((left, right) => left - right);
+  return uniqueSorted;
+}
+
+function toDailyHoursCsv(hours: number[]): string {
+  return hours.join(",");
+}
+
+function toNotificationScheduleConfig(
+  record: PrismaNotificationSettings | null,
+): NotificationScheduleConfig {
+  const candidate: NotificationScheduleConfig =
+    record === null
+      ? {
+        ...DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
+        dailyHours: [...DEFAULT_NOTIFICATION_SCHEDULE_CONFIG.dailyHours],
+      }
+      : {
+        enabled: record.enabled,
+        dailyEnabled: record.dailyEnabled,
+        dailyHours: parseDailyHoursCsv(record.dailyHoursCsv),
+        weeklyEnabled: record.weeklyEnabled,
+        weeklyDay: record.weeklyDay,
+        weeklyHour: record.weeklyHour,
+        windowMinutes: record.windowMinutes,
+      };
+
+  try {
+    return notificationScheduleConfigSchema.parse(candidate);
+  } catch {
+    return {
+      ...DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
+      dailyHours: [...DEFAULT_NOTIFICATION_SCHEDULE_CONFIG.dailyHours],
+    };
+  }
+}
+
+function toNotificationSettingsDto(
+  record: PrismaNotificationSettings | null,
+): NotificationSettings {
+  const schedule = toNotificationScheduleConfig(record);
+  return {
+    ...schedule,
+    updatedAt: record?.updatedAt.toISOString() ?? null,
+  };
+}
+
+function toNotificationSettingsUpdateData(
+  input: ReturnType<typeof notificationSettingsUpdateInputSchema.parse>,
+): Prisma.NotificationSettingsUpdateInput {
+  const data: Prisma.NotificationSettingsUpdateInput = {};
+
+  if (input.enabled !== undefined) {
+    data.enabled = input.enabled;
+  }
+  if (input.dailyEnabled !== undefined) {
+    data.dailyEnabled = input.dailyEnabled;
+  }
+  if (input.dailyHours !== undefined) {
+    data.dailyHoursCsv = toDailyHoursCsv(input.dailyHours);
+  }
+  if (input.weeklyEnabled !== undefined) {
+    data.weeklyEnabled = input.weeklyEnabled;
+  }
+  if (input.weeklyDay !== undefined) {
+    data.weeklyDay = input.weeklyDay;
+  }
+  if (input.weeklyHour !== undefined) {
+    data.weeklyHour = input.weeklyHour;
+  }
+  if (input.windowMinutes !== undefined) {
+    data.windowMinutes = input.windowMinutes;
+  }
+
+  return data;
+}
+
+function toDefaultNotificationSettingsCreateData(): Prisma.NotificationSettingsCreateInput {
+  return {
+    id: NOTIFICATION_SETTINGS_ID,
+    enabled: DEFAULT_NOTIFICATION_SCHEDULE_CONFIG.enabled,
+    dailyEnabled: DEFAULT_NOTIFICATION_SCHEDULE_CONFIG.dailyEnabled,
+    dailyHoursCsv: toDailyHoursCsv(DEFAULT_NOTIFICATION_SCHEDULE_CONFIG.dailyHours),
+    weeklyEnabled: DEFAULT_NOTIFICATION_SCHEDULE_CONFIG.weeklyEnabled,
+    weeklyDay: DEFAULT_NOTIFICATION_SCHEDULE_CONFIG.weeklyDay,
+    weeklyHour: DEFAULT_NOTIFICATION_SCHEDULE_CONFIG.weeklyHour,
+    windowMinutes: DEFAULT_NOTIFICATION_SCHEDULE_CONFIG.windowMinutes,
+  };
+}
+
+function toNotificationSettingsCreateData(
+  input: ReturnType<typeof notificationSettingsUpdateInputSchema.parse>,
+): Prisma.NotificationSettingsCreateInput {
+  const data = toDefaultNotificationSettingsCreateData();
+
+  if (input.enabled !== undefined) {
+    data.enabled = input.enabled;
+  }
+  if (input.dailyEnabled !== undefined) {
+    data.dailyEnabled = input.dailyEnabled;
+  }
+  if (input.dailyHours !== undefined) {
+    data.dailyHoursCsv = toDailyHoursCsv(input.dailyHours);
+  }
+  if (input.weeklyEnabled !== undefined) {
+    data.weeklyEnabled = input.weeklyEnabled;
+  }
+  if (input.weeklyDay !== undefined) {
+    data.weeklyDay = input.weeklyDay;
+  }
+  if (input.weeklyHour !== undefined) {
+    data.weeklyHour = input.weeklyHour;
+  }
+  if (input.windowMinutes !== undefined) {
+    data.windowMinutes = input.windowMinutes;
+  }
+
+  return data;
+}
+
+async function readNotificationSettings(): Promise<NotificationSettings> {
+  const record = await prisma.notificationSettings.findUnique({
+    where: { id: NOTIFICATION_SETTINGS_ID },
+  });
+  return toNotificationSettingsDto(record);
+}
+
 async function appendTaskMutationEvent(
   tx: Prisma.TransactionClient,
   taskId: string | null,
@@ -273,10 +418,36 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   if (method === "GET" && pathname === "/api/tasks") {
-    const tasks = await prisma.task.findMany({
-      orderBy: [{ status: "asc" }, { position: "asc" }, { createdAt: "asc" }],
+    const [tasks, notificationSettings] = await Promise.all([
+      prisma.task.findMany({
+        orderBy: [{ status: "asc" }, { position: "asc" }, { createdAt: "asc" }],
+      }),
+      readNotificationSettings(),
+    ]);
+    sendJson(response, 200, {
+      tasks: tasks.map(toTaskDto),
+      notificationSettings,
     });
-    sendJson(response, 200, { tasks: tasks.map(toTaskDto) });
+    return;
+  }
+
+  if (method === "GET" && pathname === NOTIFICATION_SETTINGS_ROUTE) {
+    const settings = await readNotificationSettings();
+    sendJson(response, 200, { settings });
+    return;
+  }
+
+  if (method === "PATCH" && pathname === NOTIFICATION_SETTINGS_ROUTE) {
+    const body = await readJsonBody(request);
+    const input = notificationSettingsUpdateInputSchema.parse(body);
+
+    const updated = await prisma.notificationSettings.upsert({
+      where: { id: NOTIFICATION_SETTINGS_ID },
+      update: toNotificationSettingsUpdateData(input),
+      create: toNotificationSettingsCreateData(input),
+    });
+
+    sendJson(response, 200, { settings: toNotificationSettingsDto(updated) });
     return;
   }
 
@@ -527,6 +698,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (
     pathname === "/api/health" ||
     pathname === "/api/tasks" ||
+    pathname === NOTIFICATION_SETTINGS_ROUTE ||
     pathname === TASK_ID_ROUTE_TEMPLATE ||
     pathname === TASK_MOVE_ROUTE_TEMPLATE ||
     extractTaskId(pathname) !== null ||

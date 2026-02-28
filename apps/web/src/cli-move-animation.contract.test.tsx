@@ -33,7 +33,7 @@ const jsonResponse = (tasks: unknown[]) =>
   });
 
 const getColumn = (label: string): HTMLElement => {
-  const heading = screen.getByRole("heading", { name: label });
+  const heading = screen.getByRole("heading", { name: new RegExp(`^${label}`) });
   const column = heading.closest("[data-column-status]");
   if (!column) {
     throw new Error(`Column not found for ${label}`);

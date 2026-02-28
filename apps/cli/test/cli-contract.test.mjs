@@ -22,10 +22,12 @@ test("taskery CLI exposes required command surface", () => {
   assert.match(help.stdout, /\bupdate\b/i);
   assert.match(help.stdout, /\bmove\b/i);
   assert.match(help.stdout, /\bdelete\b/i);
+  assert.match(help.stdout, /\bsettings\b/i);
   assert.match(help.stdout, /--json/i);
   assert.match(help.stdout, /--text/i);
   assert.match(help.stdout, /--create/i);
   assert.match(help.stdout, /--move/i);
+  assert.match(help.stdout, /--settings/i);
   assert.match(help.stdout, /CLI_API_BASE_URL/i);
   assert.match(help.stdout, /Exit Codes/i);
 });

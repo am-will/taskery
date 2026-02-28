@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyBoardState, type BoardState } from "../board/kanban-state";
 import { collectScheduledReminders } from "./reminders";
+import { DEFAULT_NOTIFICATION_SCHEDULE_CONFIG } from "taskery-shared";
 
 const withTasks = (
   entries: Array<{ id: string; title: string; status: keyof BoardState; dueAt?: string | null }>,
@@ -52,7 +53,7 @@ describe("collectScheduledReminders", () => {
       new Date("2026-03-02T10:03:00.000"),
     );
 
-    expect(reminders.some((reminder) => reminder.dedupeKey === "weekly:2026-03-02:10")).toBe(
+    expect(reminders.some((reminder) => reminder.dedupeKey === "weekly:2026-03-02:1:10")).toBe(
       true,
     );
   });
@@ -66,5 +67,34 @@ describe("collectScheduledReminders", () => {
     );
 
     expect(reminders).toEqual([]);
+  });
+
+  it("returns no reminders when notifications are disabled", () => {
+    const reminders = collectScheduledReminders(
+      withTasks([
+        { id: "1", title: "Ship release", status: "PENDING", dueAt: "2026-03-03T17:00:00.000Z" },
+      ]),
+      new Date("2026-03-03T10:05:00.000"),
+      { ...DEFAULT_NOTIFICATION_SCHEDULE_CONFIG, enabled: false },
+    );
+
+    expect(reminders).toEqual([]);
+  });
+
+  it("respects configurable daily hours and reminder window", () => {
+    const reminders = collectScheduledReminders(
+      withTasks([
+        { id: "1", title: "Ship release", status: "PENDING", dueAt: "2026-03-03T17:00:00.000Z" },
+      ]),
+      new Date("2026-03-03T09:04:00.000"),
+      {
+        ...DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
+        dailyHours: [9],
+        windowMinutes: 5,
+      },
+    );
+
+    expect(reminders.length).toBe(1);
+    expect(reminders[0]?.dedupeKey).toBe("daily:2026-03-03:9");
   });
 });

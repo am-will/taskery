@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
   ERROR_CODES,
   INITIAL_TASK_VERSION,
   MIN_POSITION,
@@ -12,6 +13,8 @@ import {
   isTransitionAllowed,
   normalizePosition,
   normalizeVersion,
+  notificationScheduleConfigSchema,
+  notificationSettingsUpdateInputSchema,
   taskCreateInputSchema,
   taskDeleteInputSchema,
   taskMoveInputSchema,
@@ -156,5 +159,38 @@ describe("task domain contracts", () => {
       message: "Version mismatch",
       details: { expected: 3, actual: 4 },
     });
+  });
+
+  it("validates notification settings defaults and update payloads", () => {
+    expect(
+      notificationScheduleConfigSchema.parse({
+        ...DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
+      }),
+    ).toEqual(DEFAULT_NOTIFICATION_SCHEDULE_CONFIG);
+
+    expect(
+      notificationSettingsUpdateInputSchema.parse({
+        enabled: false,
+        dailyHours: [13, 10, 13],
+        weeklyDay: 5,
+      }),
+    ).toEqual({
+      enabled: false,
+      dailyHours: [10, 13],
+      weeklyDay: 5,
+    });
+
+    expect(() => notificationSettingsUpdateInputSchema.parse({})).toThrowError();
+    expect(() =>
+      notificationSettingsUpdateInputSchema.parse({
+        dailyHours: ["10"],
+      }),
+    ).toThrowError();
+    expect(() =>
+      notificationScheduleConfigSchema.parse({
+        ...DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
+        weeklyHour: 24,
+      }),
+    ).toThrowError();
   });
 });

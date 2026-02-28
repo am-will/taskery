@@ -12,7 +12,7 @@ describe("desktop kanban shell", () => {
     );
 
     for (const column of ["Pending", "Started", "Blocked", "Review", "Complete"]) {
-      expect(screen.getByRole("heading", { name: column })).toBeTruthy();
+      expect(screen.getByRole("heading", { name: new RegExp(`^${column}`) })).toBeTruthy();
     }
   });
 });
