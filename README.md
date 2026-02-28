@@ -89,12 +89,16 @@ Priorities: LOW, MEDIUM, HIGH, URGENT
 
 Once your agent has these instructions, it can create tasks from conversations, move them as it completes work, and keep the board updated as it goes.
 
-## Install The Official CLI (npm via pnpm)
+## Install The Official CLI (Global)
 
-Install the published CLI from npm with pnpm:
+Install the published CLI globally from npm with either pnpm or npm:
 
 ```bash
+# pnpm
 pnpm add -g taskery-cli
+
+# npm
+npm install -g taskery-cli
 ```
 
 Then run:
@@ -132,7 +136,7 @@ All responses follow the same envelope:
 
 The CLI outputs JSON by default so agents can parse it. Add `--text` for a human-readable view.
 
-If you installed from npm, use `taskery ...`. If you're developing inside this repo, use `pnpm --filter taskery-cli exec taskery ...`.
+If you installed globally (with pnpm or npm), use `taskery ...`. If you're developing inside this repo, use `pnpm --filter taskery-cli exec taskery ...`.
 
 ```bash
 # See all tasks
