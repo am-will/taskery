@@ -74,6 +74,14 @@ type ApiNotificationSettingsResponse = {
   settings: NotificationSettings;
 };
 
+function formatListenError(error: Error, host: string, port: number): string {
+  const maybeErrno = error as NodeJS.ErrnoException;
+  if (maybeErrno.code === "EADDRINUSE") {
+    return `Port ${host}:${port} is already in use. Stop the existing process or run taskery up --port <port>.`;
+  }
+  return `Failed to start Taskery server: ${error.message}`;
+}
+
 function resolveApiBaseUrl(): string {
   const rawBaseUrl = process.env.CLI_API_BASE_URL ?? process.env.API_BASE_URL ?? DEFAULT_API_BASE_URL;
   return rawBaseUrl.endsWith("/") ? rawBaseUrl.slice(0, -1) : rawBaseUrl;
@@ -636,23 +644,47 @@ async function runUp(flags: Map<string, string | boolean>): Promise<number> {
     printResult(failure, false);
     return failure.exitCode;
   }
-  if (typeof apiModule.startApiServer !== "function") {
+  if (typeof apiModule.createApiServer !== "function") {
     const failure = toCliFailure(
       ERROR_CODES.INTERNAL_ERROR,
-      "Bundled API module is invalid (missing startApiServer export).",
+      "Bundled API module is invalid (missing createApiServer export).",
       EXIT_CODE_INTERNAL,
     );
     printResult(failure, false);
     return failure.exitCode;
   }
 
-  const server = apiModule.startApiServer() as Server;
+  const server = (apiModule.createApiServer as () => Server)();
+  const listenFailure = await new Promise<CliFailure | null>((resolvePromise) => {
+    const onError = (error: Error) => {
+      server.off("listening", onListening);
+      resolvePromise(
+        toCliFailure(ERROR_CODES.INTERNAL_ERROR, formatListenError(error, host, port), EXIT_CODE_INTERNAL),
+      );
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      resolvePromise(null);
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, host);
+  });
+  if (listenFailure !== null) {
+    printResult(listenFailure, false);
+    return listenFailure.exitCode;
+  }
+
   const appUrl = `http://${host}:${port}`;
   process.stdout.write(`Taskery is running.\n`);
   process.stdout.write(`Web UI: ${appUrl}\n`);
   process.stdout.write(`API: ${appUrl}/api/health\n`);
   process.stdout.write(`Data directory: ${dataDirectory}\n`);
   process.stdout.write("Press Ctrl+C to stop.\n");
+  const onServerError = (error: Error) => {
+    process.stderr.write(`Taskery server error: ${error.message}\n`);
+  };
+  server.on("error", onServerError);
 
   return await new Promise<number>((resolvePromise) => {
     let resolved = false;
@@ -663,6 +695,7 @@ async function runUp(flags: Map<string, string | boolean>): Promise<number> {
       resolved = true;
       process.off("SIGINT", onSigint);
       process.off("SIGTERM", onSigterm);
+      server.off("error", onServerError);
       resolvePromise(exitCode);
     };
     const shutdown = (signal: "SIGINT" | "SIGTERM") => {
