@@ -1,5 +1,7 @@
 # Taskery
 
+<img width="1272" height="959" alt="image" src="https://github.com/user-attachments/assets/08e4d982-38d6-45f2-9172-a8fadf6c258b" />
+
 A task board that both you and your AI coding agents can use at the same time.
 
 Taskery is a local Kanban board with a web UI, a CLI, and an API — all pointing at the same SQLite database. You drag cards around in the browser while your agents create, move, and close tasks from the terminal. Everything stays in sync.
