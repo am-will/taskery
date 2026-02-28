@@ -1,5 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
+/* ── Houdini property for animated gradient angle ── */
+@property --gradient-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
 :root {
   /* ── Foundation ── */
   --bg-base: #09090b;
@@ -56,31 +63,77 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(ellipse at 15% 0%, rgba(234, 179, 8, 0.03) 0%, transparent 50%),
-    radial-gradient(ellipse at 85% 5%, rgba(168, 85, 247, 0.025) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 100%, rgba(59, 130, 246, 0.02) 0%, transparent 50%),
-    var(--bg-base);
+  background: var(--bg-base);
 }
 
 /* ── App Root ── */
 .app-root {
+  position: relative;
   min-height: 100vh;
   padding: 1.5rem;
 }
 
+/* Animated ambient glow blobs */
+.app-root::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(234, 179, 8, 0.045), transparent 40%),
+    radial-gradient(circle at 80% 20%, rgba(168, 85, 247, 0.04), transparent 35%),
+    radial-gradient(circle at 50% 80%, rgba(59, 130, 246, 0.035), transparent 40%),
+    radial-gradient(circle at 70% 60%, rgba(239, 68, 68, 0.02), transparent 35%);
+  animation: ambient-drift 25s ease-in-out infinite;
+}
+
+/* Grid pattern with radial mask */
+.app-root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+
 /* ── Board Shell ── */
 .board-shell {
+  --gradient-angle: 0deg;
+  position: relative;
   width: min(1440px, 100%);
   margin: 0 auto;
   padding: 1.5rem;
-  border: 1px solid var(--border-default);
+  border: 2px solid transparent;
   border-radius: var(--radius-xl);
-  background: rgba(15, 19, 24, 0.85);
-  backdrop-filter: blur(20px);
+  background:
+    linear-gradient(rgba(15, 19, 24, 0.92), rgba(15, 19, 24, 0.92)) padding-box,
+    conic-gradient(
+      from var(--gradient-angle),
+      transparent 0%,
+      rgba(234, 179, 8, 0.5) 4%,
+      #eab308 8%,
+      #3b82f6 18%,
+      #a855f7 28%,
+      #ef4444 36%,
+      #10b981 44%,
+      rgba(16, 185, 129, 0.5) 48%,
+      transparent 54%,
+      transparent 100%
+    ) border-box;
+  backdrop-filter: blur(16px);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.02),
     0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: border-spin 6s linear infinite;
 }
 
 /* ── Board Header ── */
@@ -673,6 +726,20 @@ body {
 .task-modal-actions button:first-child:hover:enabled {
   border-color: var(--border-strong);
   background: var(--bg-surface);
+}
+
+/* ── Background & Border Animations ── */
+@keyframes border-spin {
+  from { --gradient-angle: 0deg; }
+  to { --gradient-angle: 360deg; }
+}
+
+@keyframes ambient-drift {
+  0% { transform: translate(0%, 0%) rotate(0deg); }
+  25% { transform: translate(3%, -2%) rotate(2deg); }
+  50% { transform: translate(-2%, 3%) rotate(-1deg); }
+  75% { transform: translate(2%, 1%) rotate(1deg); }
+  100% { transform: translate(0%, 0%) rotate(0deg); }
 }
 
 /* ── Responsive ── */
