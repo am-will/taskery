@@ -734,6 +734,20 @@ body {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.task-card.is-due-today .task-card-meta .task-chip:last-child {
+  color: #f59e0b;
+  font-weight: 700;
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.task-card.is-overdue .task-card-meta .task-chip:last-child {
+  color: #ef4444;
+  font-weight: 700;
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.14);
+}
+
 /* ── Delete Button ── */
 .task-card-delete,
 .task-modal-close,
