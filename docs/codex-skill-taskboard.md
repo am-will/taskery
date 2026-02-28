@@ -15,7 +15,7 @@ Run from workspace root:
 5. Start web:
    - `VITE_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/web dev`
 6. Use CLI:
-   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts --help`
+   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts --help`
 
 ## Health Checks
 
@@ -26,7 +26,7 @@ Run from workspace root:
   - `curl -sf http://127.0.0.1:4010/api/tasks`
   - Expected: JSON envelope containing `tasks`
 - CLI reachability to API:
-  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts list`
+  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts list`
   - Expected exit code `0` with JSON payload (`--json` is default)
 
 ## DB Reset and Seed
@@ -61,17 +61,17 @@ The CLI is deterministic for automation because it defaults to JSON output.
 Examples:
 
 - List tasks for agent parsing:
-  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts list | jq`
+  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts list | jq`
 - Create task:
-  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts create "Triage prod issue" --priority HIGH --status PENDING`
+  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts create "Triage prod issue" --priority HIGH --status PENDING`
 - Update task with optimistic version check:
-  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts update <taskId> --title "Updated title" --expectedVersion <version>`
+  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts update <taskId> --title "Updated title" --expectedVersion <version>`
 - Move task:
-  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts move <taskId> --toStatus REVIEW --expectedVersion <version>`
+  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts move <taskId> --toStatus REVIEW --expectedVersion <version>`
 - Delete task:
-  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts delete <taskId> --expectedVersion <version>`
+  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts delete <taskId> --expectedVersion <version>`
 - Human-readable output for operator use:
-  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts list --text`
+  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts list --text`
 
 ## Exit Codes and Error Behavior
 

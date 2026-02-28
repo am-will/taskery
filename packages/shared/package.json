@@ -1,7 +1,7 @@
 {
-  "name": "@taskboard/shared",
-  "private": true,
-  "version": "0.0.0",
+  "name": "taskery-shared",
+  "private": false,
+  "version": "0.1.0",
   "type": "module",
   "exports": {
     ".": {
@@ -9,11 +9,18 @@
       "default": "./dist/index.js"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

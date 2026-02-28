@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 test("taskboard CLI exposes required command surface", () => {
   const help = spawnSync(
     "pnpm",
-    ["--filter", "@taskboard/cli", "exec", "tsx", "src/bin/taskboard.ts", "--help"],
+    ["--filter", "taskery-cli", "exec", "tsx", "src/bin/taskboard.ts", "--help"],
     {
       cwd: process.cwd(),
       encoding: "utf8",

@@ -22,8 +22,8 @@ Monorepo for Tasky API, web UI, CLI, and shared contracts.
 5. Start web (terminal 2):
    - `VITE_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/web dev`
 6. Use CLI (terminal 3):
-   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts list`
-   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts delete <taskId> --expectedVersion <version>`
+   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts list`
+   - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts delete <taskId> --expectedVersion <version>`
 
 ## Health Checks
 
@@ -32,7 +32,7 @@ Monorepo for Tasky API, web UI, CLI, and shared contracts.
 - API task list:
   - `curl -sf http://127.0.0.1:4010/api/tasks`
 - CLI to API:
-  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/cli exec tsx src/bin/taskboard.ts list`
+  - `CLI_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec tsx src/bin/taskboard.ts list`
 
 ## Script Index
 

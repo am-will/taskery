@@ -32,7 +32,7 @@ const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
 const REFRESH_INTERVAL_MS = 5000;
 const EXTERNAL_MOVE_HIGHLIGHT_MS = 280;
 const EXTERNAL_MOVE_TRAVEL_MS = 920;
-const REMINDER_STORAGE_PREFIX = "tasky:reminder:";
+const REMINDER_STORAGE_PREFIX = "taskery:reminder:";
 
 const statusLabels: Record<BoardStatus, string> = {
   PENDING: "Pending",
@@ -1163,7 +1163,7 @@ export function App() {
         aria-label="Task workflow board"
       >
         <header className="board-header">
-          <h1>TaskyUI</h1>
+          <h1>Taskery</h1>
           <div className="board-header-meta">
             <p>Desktop workflow shell</p>
             <p

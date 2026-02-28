@@ -9,6 +9,6 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint",
     "test": "pnpm -r --workspace-concurrency=1 --if-present test",
-    "test:domain": "pnpm --filter @taskboard/shared test -- src/contracts.test.ts"
+    "test:domain": "pnpm --filter taskery-shared test -- src/contracts.test.ts"
   }
 }

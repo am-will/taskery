@@ -1,20 +1,28 @@
 {
-  "name": "@taskboard/cli",
-  "private": true,
-  "version": "0.0.0",
+  "name": "taskery-cli",
+  "private": false,
+  "version": "0.1.0",
   "type": "module",
   "bin": {
+    "taskery": "dist/bin/taskboard.js",
     "taskboard": "dist/bin/taskboard.js",
     "tasky": "dist/bin/taskboard.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx watch src/bin/taskboard.ts",
     "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/**/*.test.mjs"
   },
   "dependencies": {
-    "@taskboard/shared": "workspace:*"
+    "taskery-shared": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

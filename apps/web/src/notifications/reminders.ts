@@ -102,7 +102,7 @@ export const collectScheduledReminders = (
 
     reminders.push({
       dedupeKey: `daily:${today}:${hour}`,
-      title: `Tasky due-today reminder (${hour === 10 ? "10:00" : "13:00"})`,
+      title: `Taskery due-today reminder (${hour === 10 ? "10:00" : "13:00"})`,
       body: `${dueTodayTitles.length} task${dueTodayTitles.length === 1 ? "" : "s"} due today: ${listTitles(dueTodayTitles)}.`,
     });
   }
@@ -125,7 +125,7 @@ export const collectScheduledReminders = (
 
   reminders.push({
     dedupeKey: `weekly:${mondayKey}:${WEEKLY_REMINDER_HOUR}`,
-    title: "Tasky weekly due-date reminder (Monday 10:00)",
+    title: "Taskery weekly due-date reminder (Monday 10:00)",
     body: `${dueThisWeekTitles.length} task${dueThisWeekTitles.length === 1 ? "" : "s"} due this week: ${listTitles(dueThisWeekTitles)}.`,
   });
 

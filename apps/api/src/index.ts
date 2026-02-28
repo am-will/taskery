@@ -12,7 +12,7 @@ import {
   type Task,
   type TaskErrorCode,
   type TaskStatus,
-} from "@taskboard/shared";
+} from "taskery-shared";
 
 const DEFAULT_API_HOST = "127.0.0.1";
 const DEFAULT_API_PORT = 4010;

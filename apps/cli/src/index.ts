@@ -1,4 +1,4 @@
-import { ERROR_CODES, type Task, type TaskErrorCode } from "@taskboard/shared";
+import { ERROR_CODES, type Task, type TaskErrorCode } from "taskery-shared";
 
 const EXIT_CODE_SUCCESS = 0;
 const EXIT_CODE_INTERNAL = 1;
