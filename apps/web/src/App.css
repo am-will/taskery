@@ -269,6 +269,22 @@ body {
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
 }
 
+.task-card.is-due-today,
+.task-card.is-due-today:hover {
+  border-color: rgba(255, 219, 112, 0.95);
+  box-shadow:
+    0 0 0 1px rgba(255, 219, 112, 0.55),
+    0 10px 22px rgba(0, 0, 0, 0.28);
+}
+
+.task-card.is-overdue,
+.task-card.is-overdue:hover {
+  border-color: rgba(255, 120, 120, 0.98);
+  box-shadow:
+    0 0 0 1px rgba(255, 120, 120, 0.62),
+    0 12px 26px rgba(0, 0, 0, 0.3);
+}
+
 .task-card:focus-visible {
   outline: 2px solid rgba(124, 169, 255, 0.9);
   outline-offset: 2px;
@@ -350,6 +366,51 @@ body {
 .task-card.overlay {
   cursor: grabbing;
   opacity: 0.95;
+}
+
+.task-card.is-external-moving-source {
+  opacity: 0.18;
+  border-color: rgba(255, 214, 137, 0.5);
+  filter: saturate(0.7);
+}
+
+.external-move-overlay {
+  position: fixed;
+  z-index: 35;
+  pointer-events: none;
+  transition:
+    top 920ms cubic-bezier(0.24, 0.8, 0.26, 1),
+    left 920ms cubic-bezier(0.24, 0.8, 0.26, 1),
+    width 920ms ease;
+}
+
+.external-move-card {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding-right: 0.75rem;
+  border-color: rgba(255, 214, 137, 0.84);
+  box-shadow: 0 0 0 rgba(255, 219, 142, 0);
+  transition:
+    transform 320ms ease,
+    box-shadow 320ms ease,
+    border-color 320ms ease;
+}
+
+.external-move-overlay.phase-highlight .external-move-card {
+  transform: scale(1.035) translateY(-4px);
+  border-color: rgba(255, 219, 142, 0.95);
+  box-shadow:
+    0 0 0 1px rgba(255, 219, 142, 0.7),
+    0 0 30px rgba(255, 219, 142, 0.42);
+}
+
+.external-move-overlay.phase-moving .external-move-card {
+  transform: scale(1) translateY(0);
+  border-color: rgba(255, 199, 109, 0.88);
+  box-shadow:
+    0 0 0 1px rgba(255, 199, 109, 0.5),
+    0 14px 26px rgba(0, 0, 0, 0.36);
 }
 
 .empty-column {

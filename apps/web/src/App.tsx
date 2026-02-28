@@ -29,6 +29,8 @@ import {
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
 const REFRESH_INTERVAL_MS = 5000;
+const EXTERNAL_MOVE_HIGHLIGHT_MS = 280;
+const EXTERNAL_MOVE_TRAVEL_MS = 920;
 
 const statusLabels: Record<BoardStatus, string> = {
   PENDING: "Pending",
@@ -114,6 +116,31 @@ type TaskRecord = {
   task: BoardTask;
 };
 
+type DueVisualState = "today" | "overdue" | null;
+
+type RectSnapshot = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+type ExternalMoveOverlay = {
+  taskId: string;
+  task: BoardTask;
+  fromRect: RectSnapshot;
+  toRect: RectSnapshot;
+  phase: "highlight" | "moving";
+};
+
+type StatusTransitionCandidate = {
+  taskId: string;
+  fromStatus: BoardStatus;
+  toStatus: BoardStatus;
+  toIndex: number;
+  nextTask: BoardTask;
+};
+
 const findTaskLocation = (board: BoardState, taskId: string) => {
   for (const status of BOARD_STATUSES) {
     const index = board[status].findIndex((task) => task.id === taskId);
@@ -136,6 +163,101 @@ const findTaskRecord = (board: BoardState, taskId: string): TaskRecord | null =>
   }
 
   return { status: location.status, task };
+};
+
+const toRectSnapshot = (rect: DOMRect): RectSnapshot => ({
+  top: rect.top,
+  left: rect.left,
+  width: rect.width,
+  height: rect.height,
+});
+
+const parseCssPixels = (value: string): number => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const findTaskCardElement = (taskId: string): HTMLElement | null => {
+  const cards = document.querySelectorAll<HTMLElement>("[data-task-id]");
+  for (const card of cards) {
+    if (card.dataset.taskId === taskId) {
+      return card;
+    }
+  }
+
+  return null;
+};
+
+const findColumnBodyElement = (status: BoardStatus): HTMLElement | null =>
+  document.querySelector<HTMLElement>(`[data-column-status="${status}"] .column-body`);
+
+const computeExternalMoveTargetRect = (
+  status: BoardStatus,
+  targetIndex: number,
+  cardHeight: number,
+  cardWidth: number,
+): RectSnapshot | null => {
+  const columnBody = findColumnBodyElement(status);
+  if (!columnBody) {
+    return null;
+  }
+
+  const bodyRect = columnBody.getBoundingClientRect();
+  const bodyStyle = window.getComputedStyle(columnBody);
+  const gap = parseCssPixels(bodyStyle.rowGap || bodyStyle.gap);
+  const paddingTop = parseCssPixels(bodyStyle.paddingTop);
+  const paddingBottom = parseCssPixels(bodyStyle.paddingBottom);
+  const paddingLeft = parseCssPixels(bodyStyle.paddingLeft);
+  const paddingRight = parseCssPixels(bodyStyle.paddingRight);
+  const minTop = bodyRect.top + paddingTop;
+  const minLeft = bodyRect.left + paddingLeft;
+  const maxTop = Math.max(minTop, bodyRect.bottom - paddingBottom - cardHeight);
+  const availableWidth = Math.max(0, bodyRect.width - paddingLeft - paddingRight);
+  const width = availableWidth > 0 ? Math.min(cardWidth, availableWidth) : cardWidth;
+  const maxLeft = Math.max(minLeft, bodyRect.right - paddingRight - width);
+  const unclampedTop = minTop + Math.max(0, targetIndex) * (cardHeight + gap);
+
+  return {
+    top: Math.min(unclampedTop, maxTop),
+    left: Math.min(minLeft, maxLeft),
+    width,
+    height: cardHeight,
+  };
+};
+
+const findFirstStatusTransition = (
+  currentBoard: BoardState,
+  nextBoard: BoardState,
+): StatusTransitionCandidate | null => {
+  const nextTaskLocations = new Map<
+    string,
+    { status: BoardStatus; index: number; task: BoardTask }
+  >();
+
+  for (const status of BOARD_STATUSES) {
+    nextBoard[status].forEach((task, index) => {
+      nextTaskLocations.set(task.id, { status, index, task });
+    });
+  }
+
+  for (const status of BOARD_STATUSES) {
+    for (const task of currentBoard[status]) {
+      const nextLocation = nextTaskLocations.get(task.id);
+      if (!nextLocation || nextLocation.status === status) {
+        continue;
+      }
+
+      return {
+        taskId: task.id,
+        fromStatus: status,
+        toStatus: nextLocation.status,
+        toIndex: nextLocation.index,
+        nextTask: nextLocation.task,
+      };
+    }
+  }
+
+  return null;
 };
 
 const parseNullableString = (value: unknown): string | null => {
@@ -266,6 +388,38 @@ const toDateInputValue = (isoDate: string | null | undefined): string => {
 const toApiDueAt = (dueDate: string): string | null =>
   dueDate.trim().length === 0 ? null : `${dueDate}T17:00:00.000Z`;
 
+const toLocalDateKey = (value: Date): string => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getDueVisualState = (
+  dueAt: string | null | undefined,
+  status: BoardStatus,
+): DueVisualState => {
+  if (status === "COMPLETE") {
+    return null;
+  }
+
+  const dueDate = toDateInputValue(dueAt);
+  if (dueDate.length === 0) {
+    return null;
+  }
+
+  const today = toLocalDateKey(new Date());
+  if (dueDate < today) {
+    return "overdue";
+  }
+
+  if (dueDate === today) {
+    return "today";
+  }
+
+  return null;
+};
+
 const formatDueDateLabel = (dueAt: string | null | undefined): string => {
   const dueDate = toDateInputValue(dueAt);
   return dueDate.length > 0 ? dueDate : "No due date";
@@ -306,15 +460,18 @@ function SortableTaskCard({
   onDeleteTask,
   onOpenTask,
   isDeleting,
+  movingTaskId,
 }: {
   status: BoardStatus;
   task: BoardTask;
   onDeleteTask: (task: BoardTask) => Promise<void>;
   onOpenTask: (task: BoardTask, status: BoardStatus) => void;
   isDeleting: boolean;
+  movingTaskId: string | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: taskDragId(task.id) });
+  const dueVisualState = getDueVisualState(task.dueAt, status);
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -324,8 +481,13 @@ function SortableTaskCard({
     <article
       ref={setNodeRef}
       style={style}
-      className={`task-card${isDragging ? " is-dragging" : ""}`}
+      className={`task-card${isDragging ? " is-dragging" : ""}${
+        movingTaskId === task.id ? " is-external-moving-source" : ""
+      }${dueVisualState === "today" ? " is-due-today" : ""}${
+        dueVisualState === "overdue" ? " is-overdue" : ""
+      }`}
       data-testid={`task-card-${task.id}`}
+      data-task-id={task.id}
       onClick={() => {
         if (!isDragging) {
           onOpenTask(task, status);
@@ -363,19 +525,25 @@ function Column({
   onDeleteTask,
   onOpenTask,
   deletingTaskIds,
+  movingTaskId,
 }: {
   status: BoardStatus;
   tasks: BoardTask[];
   onDeleteTask: (task: BoardTask) => Promise<void>;
   onOpenTask: (task: BoardTask, status: BoardStatus) => void;
   deletingTaskIds: Set<string>;
+  movingTaskId: string | null;
 }) {
   const { isOver, setNodeRef } = useDroppable({
     id: columnDropId(status),
   });
 
   return (
-    <article className={`workflow-column${isOver ? " is-over" : ""}`} role="listitem">
+    <article
+      className={`workflow-column${isOver ? " is-over" : ""}`}
+      role="listitem"
+      data-column-status={status}
+    >
       <h2>{statusLabels[status]}</h2>
       <div ref={setNodeRef} className="column-body">
         <SortableContext items={tasks.map((task) => taskDragId(task.id))} strategy={verticalListSortingStrategy}>
@@ -388,6 +556,7 @@ function Column({
               onDeleteTask={onDeleteTask}
               onOpenTask={onOpenTask}
               isDeleting={deletingTaskIds.has(task.id)}
+              movingTaskId={movingTaskId}
             />
           ))}
         </SortableContext>
@@ -400,6 +569,9 @@ export function App() {
   const [createTaskDraft, setCreateTaskDraft] = useState(defaultCreateTaskDraft);
   const [board, setBoard] = useState<BoardState>(createEmptyBoardState);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [externalMoveOverlay, setExternalMoveOverlay] = useState<ExternalMoveOverlay | null>(
+    null,
+  );
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTaskDraft, setEditTaskDraft] = useState(defaultEditTaskDraft);
   const [syncStatus, setSyncStatus] = useState<BoardSyncStatus>("syncing");
@@ -407,6 +579,8 @@ export function App() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingTaskIds, setDeletingTaskIds] = useState<Set<string>>(new Set());
   const refreshPromiseRef = useRef<Promise<void> | null>(null);
+  const boardRef = useRef<BoardState>(createEmptyBoardState());
+  const isDisposedRef = useRef(false);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -417,6 +591,82 @@ export function App() {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  const commitBoardState = (nextBoard: BoardState) => {
+    boardRef.current = nextBoard;
+    setBoard(nextBoard);
+  };
+
+  const updateBoardState = (updater: (currentBoard: BoardState) => BoardState) => {
+    setBoard((currentBoard) => {
+      const nextBoard = updater(currentBoard);
+      boardRef.current = nextBoard;
+      return nextBoard;
+    });
+  };
+
+  const waitForDelay = (durationMs: number): Promise<void> =>
+    new Promise((resolve) => {
+      window.setTimeout(resolve, durationMs);
+    });
+
+  const applyRefreshedBoard = async (nextBoard: BoardState): Promise<void> => {
+    const currentBoard = boardRef.current;
+    const transition = findFirstStatusTransition(currentBoard, nextBoard);
+    if (!transition || draggingTaskId !== null) {
+      setExternalMoveOverlay(null);
+      commitBoardState(nextBoard);
+      return;
+    }
+
+    const sourceElement = findTaskCardElement(transition.taskId);
+    if (!sourceElement) {
+      setExternalMoveOverlay(null);
+      commitBoardState(nextBoard);
+      return;
+    }
+
+    const sourceRect = toRectSnapshot(sourceElement.getBoundingClientRect());
+    const targetRect = computeExternalMoveTargetRect(
+      transition.toStatus,
+      transition.toIndex,
+      sourceRect.height,
+      sourceRect.width,
+    );
+    if (!targetRect) {
+      setExternalMoveOverlay(null);
+      commitBoardState(nextBoard);
+      return;
+    }
+
+    setExternalMoveOverlay({
+      taskId: transition.taskId,
+      task: transition.nextTask,
+      fromRect: sourceRect,
+      toRect: targetRect,
+      phase: "highlight",
+    });
+
+    await waitForDelay(EXTERNAL_MOVE_HIGHLIGHT_MS);
+    if (isDisposedRef.current) {
+      return;
+    }
+
+    setExternalMoveOverlay((currentOverlay) => {
+      if (!currentOverlay || currentOverlay.taskId !== transition.taskId) {
+        return currentOverlay;
+      }
+      return { ...currentOverlay, phase: "moving" };
+    });
+
+    await waitForDelay(EXTERNAL_MOVE_TRAVEL_MS);
+    if (isDisposedRef.current) {
+      return;
+    }
+
+    commitBoardState(nextBoard);
+    setExternalMoveOverlay(null);
+  };
 
   const refreshBoardFromApi = async (promoteFromStale: boolean): Promise<void> => {
     if (refreshPromiseRef.current !== null) {
@@ -431,7 +681,7 @@ export function App() {
     const refreshPromise = (async () => {
       try {
         const refreshedBoard = await fetchBoardSnapshot();
-        setBoard(refreshedBoard);
+        await applyRefreshedBoard(refreshedBoard);
         setSyncStatus("synced");
       } catch {
         setSyncStatus("stale");
@@ -445,8 +695,13 @@ export function App() {
   };
 
   useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
+
+  useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let isDisposed = false;
+    isDisposedRef.current = false;
 
     const pollForBoardUpdates = async () => {
       try {
@@ -462,6 +717,7 @@ export function App() {
 
     return () => {
       isDisposed = true;
+      isDisposedRef.current = true;
       if (timer !== null) {
         clearTimeout(timer);
       }
@@ -506,6 +762,12 @@ export function App() {
   };
 
   const draggingTaskRecord = draggingTaskId ? findTaskRecord(board, draggingTaskId) : null;
+  const externalMoveRect =
+    externalMoveOverlay === null
+      ? null
+      : externalMoveOverlay.phase === "moving"
+        ? externalMoveOverlay.toRect
+        : externalMoveOverlay.fromRect;
 
   const handleDragStart = (event: { active: { id: string | number } }) => {
     const parsedTaskId = parseTaskId(String(event.active.id));
@@ -550,7 +812,7 @@ export function App() {
         return;
       }
 
-      setBoard((currentBoard) =>
+      updateBoardState((currentBoard) =>
         moveTaskCard(currentBoard, {
           taskId: activeId,
           fromStatus: activeLocation.status,
@@ -570,7 +832,7 @@ export function App() {
       return;
     }
 
-    setBoard((currentBoard) =>
+    updateBoardState((currentBoard) =>
       moveTaskCard(currentBoard, {
         taskId: activeId,
         fromStatus: activeLocation.status,
@@ -924,6 +1186,7 @@ export function App() {
                 onDeleteTask={handleDeleteTask}
                 onOpenTask={handleOpenTaskEditor}
                 deletingTaskIds={deletingTaskIds}
+                movingTaskId={externalMoveOverlay?.taskId ?? null}
               />
             ))}
           </section>
@@ -939,6 +1202,28 @@ export function App() {
             ) : null}
           </DragOverlay>
         </DndContext>
+
+        {externalMoveOverlay && externalMoveRect ? (
+          <div
+            className={`external-move-overlay phase-${externalMoveOverlay.phase}`}
+            style={{
+              top: `${externalMoveRect.top}px`,
+              left: `${externalMoveRect.left}px`,
+              width: `${externalMoveRect.width}px`,
+              height: `${externalMoveRect.height}px`,
+            }}
+            data-testid="external-move-overlay"
+            aria-hidden="true"
+          >
+            <article className="task-card overlay external-move-card">
+              <p className="task-card-title">{externalMoveOverlay.task.title}</p>
+              <div className="task-card-meta">
+                <span className="task-chip">{getPriorityLabel(externalMoveOverlay.task.priority)}</span>
+                <span className="task-chip">{formatDueDateLabel(externalMoveOverlay.task.dueAt)}</span>
+              </div>
+            </article>
+          </div>
+        ) : null}
       </section>
 
       {editingTaskId ? (
