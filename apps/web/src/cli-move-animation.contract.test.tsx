@@ -3,7 +3,7 @@ import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
-const REFRESH_INTERVAL_MS = 5000;
+const REFRESH_INTERVAL_MS = 1000;
 const waitForTaskInColumn = async (title: string, column: string, timeoutMs = 5000) => {
   const stepMs = 100;
   let elapsedMs = 0;

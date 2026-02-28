@@ -34,10 +34,12 @@ import {
 } from "taskery-shared";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
-const REFRESH_INTERVAL_MS = 5000;
+const REFRESH_INTERVAL_MS = 1000;
 const EXTERNAL_MOVE_HIGHLIGHT_MS = 280;
 const EXTERNAL_MOVE_TRAVEL_MS = 920;
 const CARD_HOVER_POPUP_DELAY_MS = 500;
+const HOVER_POPUP_GAP_PX = 8;
+const HOVER_POPUP_EDGE_PADDING_PX = 12;
 const REMINDER_STORAGE_PREFIX = "taskery:reminder:";
 
 const statusLabels: Record<BoardStatus, string> = {
@@ -651,6 +653,18 @@ const stopEventPropagation = (event: { stopPropagation: () => void }) => {
   event.stopPropagation();
 };
 
+const shouldFlipHoverPopupLeft = (cardRect: DOMRect): boolean => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const popupWidth = Math.min(320, window.innerWidth * 0.6);
+  const rightSpace =
+    window.innerWidth - cardRect.right - HOVER_POPUP_GAP_PX - HOVER_POPUP_EDGE_PADDING_PX;
+  const leftSpace = cardRect.left - HOVER_POPUP_GAP_PX - HOVER_POPUP_EDGE_PADDING_PX;
+  return leftSpace > rightSpace;
+};
+
 function SortableTaskCard({
   status,
   task,
@@ -669,6 +683,7 @@ function SortableTaskCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: taskDragId(task.id) });
   const [isHoverPopupVisible, setIsHoverPopupVisible] = useState(false);
+  const [isHoverPopupFlippedLeft, setIsHoverPopupFlippedLeft] = useState(false);
   const hoverPopupTimeoutRef = useRef<number | null>(null);
   const dueVisualState = getDueVisualState(task.dueAt, status);
   const style = {
@@ -705,10 +720,13 @@ function SortableTaskCard({
       data-testid={`task-card-${task.id}`}
       data-task-id={task.id}
       data-priority={task.priority ?? "MEDIUM"}
-      onMouseEnter={() => {
+      onMouseEnter={(event) => {
         if (isDragging) {
           return;
         }
+        setIsHoverPopupFlippedLeft(
+          shouldFlipHoverPopupLeft(event.currentTarget.getBoundingClientRect()),
+        );
         clearHoverPopupTimeout();
         hoverPopupTimeoutRef.current = window.setTimeout(() => {
           setIsHoverPopupVisible(true);
@@ -748,7 +766,7 @@ function SortableTaskCard({
       </div>
       {isHoverPopupVisible ? (
         <aside
-          className="task-hover-popup"
+          className={`task-hover-popup${isHoverPopupFlippedLeft ? " is-flipped-left" : ""}`}
           role="tooltip"
           data-testid={`task-hover-popup-${task.id}`}
           aria-label={`Task details for ${task.title}`}

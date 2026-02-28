@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { App } from "./App";
 
 const jsonResponse = (tasks: unknown[]) =>
@@ -11,6 +11,7 @@ const jsonResponse = (tasks: unknown[]) =>
 
 describe("task hover popup contract", () => {
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -70,5 +71,85 @@ describe("task hover popup contract", () => {
       await Promise.resolve();
     });
     expect(screen.queryByTestId("task-hover-popup-task-1")).toBeNull();
+  });
+
+  it("flips popup to the left when hovering cards near the right edge", async () => {
+    vi.useFakeTimers();
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1000,
+      writable: true,
+    });
+    try {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        jsonResponse([
+          {
+            id: "task-1",
+            title: "Right edge hover card",
+            status: "COMPLETE",
+            priority: "MEDIUM",
+            dueAt: null,
+            assignee: null,
+            notes: null,
+            position: 1000,
+            version: 1,
+          },
+        ]),
+      );
+
+      const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");
+      rectSpy.mockImplementation(function mockRect(this: HTMLElement) {
+        if (this.getAttribute("data-testid") === "task-card-task-1") {
+          return {
+            x: 900,
+            y: 80,
+            width: 80,
+            height: 72,
+            top: 80,
+            right: 980,
+            bottom: 152,
+            left: 900,
+            toJSON: () => ({}),
+          } as DOMRect;
+        }
+
+        return {
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
+
+      render(<App />);
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const card = screen.getByTestId("task-card-task-1");
+      fireEvent.mouseEnter(card);
+
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId("task-hover-popup-task-1").className).toContain(
+        "is-flipped-left",
+      );
+    } finally {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: originalInnerWidth,
+        writable: true,
+      });
+    }
   });
 });

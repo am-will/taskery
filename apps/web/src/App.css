@@ -906,6 +906,11 @@ body {
   pointer-events: none;
 }
 
+.task-hover-popup.is-flipped-left {
+  left: auto;
+  right: calc(100% + 0.5rem);
+}
+
 .task-hover-popup-title {
   margin: 0 0 0.5rem 0;
   color: var(--text-secondary);
@@ -1062,6 +1067,11 @@ body {
     top: calc(100% + 0.45rem);
     left: 0;
     width: min(24rem, 92vw);
+  }
+
+  .task-hover-popup.is-flipped-left {
+    left: 0;
+    right: auto;
   }
 }
 

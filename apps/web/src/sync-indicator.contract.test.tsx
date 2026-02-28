@@ -51,7 +51,7 @@ describe("board sync indicator", () => {
     );
 
     await act(async () => {
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(1000);
       await flushMicrotasks();
     });
 
@@ -81,7 +81,7 @@ describe("board sync indicator", () => {
     );
 
     await act(async () => {
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(1000);
       await flushMicrotasks();
     });
     expect(screen.getByTestId("sync-indicator").getAttribute("data-sync-status")).toBe(
@@ -135,7 +135,7 @@ describe("board sync indicator", () => {
     });
 
     await act(async () => {
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(1000);
       await flushMicrotasks();
     });
 
