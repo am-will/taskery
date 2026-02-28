@@ -26,11 +26,13 @@ import {
   createEmptyBoardState,
   moveTaskCard,
 } from "./board/kanban-state";
+import { collectScheduledReminders } from "./notifications/reminders";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
 const REFRESH_INTERVAL_MS = 5000;
 const EXTERNAL_MOVE_HIGHLIGHT_MS = 280;
 const EXTERNAL_MOVE_TRAVEL_MS = 920;
+const REMINDER_STORAGE_PREFIX = "tasky:reminder:";
 
 const statusLabels: Record<BoardStatus, string> = {
   PENDING: "Pending",
@@ -258,6 +260,55 @@ const findFirstStatusTransition = (
   }
 
   return null;
+};
+
+const readReminderFlag = (dedupeKey: string): boolean => {
+  try {
+    return window.localStorage.getItem(`${REMINDER_STORAGE_PREFIX}${dedupeKey}`) === "1";
+  } catch {
+    return false;
+  }
+};
+
+const writeReminderFlag = (dedupeKey: string): void => {
+  try {
+    window.localStorage.setItem(`${REMINDER_STORAGE_PREFIX}${dedupeKey}`, "1");
+  } catch {
+    // Ignore storage failures; reminders still dedupe within this app session.
+  }
+};
+
+const sendDesktopNotification = async (
+  title: string,
+  body: string,
+  dedupeKey: string,
+): Promise<boolean> => {
+  if (typeof Notification === "undefined") {
+    return false;
+  }
+
+  let permission = Notification.permission;
+  if (permission === "default") {
+    try {
+      permission = await Notification.requestPermission();
+    } catch {
+      permission = Notification.permission;
+    }
+  }
+
+  if (permission !== "granted") {
+    return false;
+  }
+
+  try {
+    new Notification(title, {
+      body,
+      tag: dedupeKey,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 const parseNullableString = (value: unknown): string | null => {
@@ -579,6 +630,7 @@ export function App() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingTaskIds, setDeletingTaskIds] = useState<Set<string>>(new Set());
   const refreshPromiseRef = useRef<Promise<void> | null>(null);
+  const reminderDedupeRef = useRef<Set<string>>(new Set());
   const boardRef = useRef<BoardState>(createEmptyBoardState());
   const isDisposedRef = useRef(false);
   const sensors = useSensors(
@@ -609,6 +661,40 @@ export function App() {
     new Promise((resolve) => {
       window.setTimeout(resolve, durationMs);
     });
+
+  const hasReminderFired = (dedupeKey: string): boolean => {
+    if (reminderDedupeRef.current.has(dedupeKey)) {
+      return true;
+    }
+
+    if (!readReminderFlag(dedupeKey)) {
+      return false;
+    }
+
+    reminderDedupeRef.current.add(dedupeKey);
+    return true;
+  };
+
+  const rememberReminderFired = (dedupeKey: string): void => {
+    reminderDedupeRef.current.add(dedupeKey);
+    writeReminderFlag(dedupeKey);
+  };
+
+  const triggerScheduledReminders = (snapshotBoard: BoardState): void => {
+    const pendingReminders = collectScheduledReminders(snapshotBoard, new Date()).filter(
+      (reminder) => !hasReminderFired(reminder.dedupeKey),
+    );
+    if (pendingReminders.length === 0) {
+      return;
+    }
+
+    void (async () => {
+      for (const reminder of pendingReminders) {
+        await sendDesktopNotification(reminder.title, reminder.body, reminder.dedupeKey);
+        rememberReminderFired(reminder.dedupeKey);
+      }
+    })();
+  };
 
   const applyRefreshedBoard = async (nextBoard: BoardState): Promise<void> => {
     const currentBoard = boardRef.current;
@@ -682,6 +768,7 @@ export function App() {
       try {
         const refreshedBoard = await fetchBoardSnapshot();
         await applyRefreshedBoard(refreshedBoard);
+        triggerScheduledReminders(refreshedBoard);
         setSyncStatus("synced");
       } catch {
         setSyncStatus("stale");
