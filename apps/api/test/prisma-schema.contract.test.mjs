@@ -10,6 +10,7 @@ test("prisma schema defines task core models and constraints", async () => {
   assert.match(schema, /model\s+Task\s+\{/);
   assert.match(schema, /model\s+TaskEvent\s+\{/);
   assert.match(schema, /model\s+NotificationSettings\s+\{/);
+  assert.match(schema, /datasource\s+db\s+\{[\s\S]*url\s+=\s+env\("DATABASE_URL"\)/);
   assert.match(schema, /status\s+TaskStatus/);
   assert.match(schema, /position\s+Int/);
   assert.match(schema, /version\s+Int/);

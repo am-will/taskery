@@ -1,6 +1,18 @@
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+const configuredDatabaseUrl = process.env.DATABASE_URL;
+const databaseUrl =
+  configuredDatabaseUrl !== undefined && configuredDatabaseUrl.trim().length > 0
+    ? configuredDatabaseUrl
+    : new URL("./dev.db", import.meta.url).href;
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: databaseUrl,
+    },
+  },
+});
 
 const seededTasks = [
   {

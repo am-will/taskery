@@ -50,8 +50,8 @@ git clone <your-repo-url> && cd tasks
 pnpm bootstrap
 
 # Set up the database
-pnpm --filter @taskboard/api exec prisma migrate deploy
-pnpm --filter @taskboard/api exec tsx prisma/seed.ts
+DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec prisma migrate deploy
+DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec tsx prisma/seed.ts
 ```
 
 Then start the API and web UI (two terminals, or use something like `tmux`):
@@ -233,8 +233,8 @@ pnpm test         # Run all tests
 **Database out of sync?** Reset it:
 
 ```bash
-pnpm --filter @taskboard/api exec prisma migrate reset --force --skip-seed
-pnpm --filter @taskboard/api exec tsx prisma/seed.ts
+DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec prisma migrate reset --force --skip-seed
+DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec tsx prisma/seed.ts
 ```
 
 **Port mismatch?** The API defaults to port `4010` and the web UI to `3010`. If things aren't connecting, set the ports explicitly:

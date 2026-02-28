@@ -7,9 +7,9 @@ Run from workspace root:
 1. Install dependencies:
    - `pnpm bootstrap`
 2. Apply migrations:
-   - `pnpm --filter @taskboard/api exec prisma migrate deploy`
+   - `DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec prisma migrate deploy`
 3. Seed deterministic local fixtures:
-   - `pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
+   - `DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
 4. Start API:
    - `API_HOST=127.0.0.1 API_PORT=4010 pnpm --filter @taskboard/api dev`
 5. Start web:
@@ -34,9 +34,9 @@ Run from workspace root:
 Use this for deterministic local recovery of `apps/api/prisma/dev.db`:
 
 1. Reset DB and reapply migrations:
-   - `pnpm --filter @taskboard/api exec prisma migrate reset --force --skip-seed`
+   - `DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec prisma migrate reset --force --skip-seed`
 2. Seed fixtures:
-   - `pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
+   - `DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
 3. Verify:
    - `curl -sf http://127.0.0.1:4010/api/tasks`
 
@@ -45,14 +45,14 @@ Use this for deterministic local recovery of `apps/api/prisma/dev.db`:
 When local schema/migration state is broken:
 
 1. Check status:
-   - `pnpm --filter @taskboard/api exec prisma migrate status`
+   - `DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec prisma migrate status`
 2. Fast recovery path (preferred for local dev DB):
-   - `pnpm --filter @taskboard/api exec prisma migrate reset --force --skip-seed`
-   - `pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
+   - `DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec prisma migrate reset --force --skip-seed`
+   - `DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
 3. If DB file is corrupted/locked, remove only local SQLite files and reapply:
    - `trash apps/api/prisma/dev.db apps/api/prisma/dev.db-journal`
-   - `pnpm --filter @taskboard/api exec prisma migrate deploy --schema prisma/schema.prisma`
-   - `pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
+   - `DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec prisma migrate deploy --schema prisma/schema.prisma`
+   - `DATABASE_URL=file:./prisma/dev.db pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
 
 ## Codex Skill Integration via CLI
 

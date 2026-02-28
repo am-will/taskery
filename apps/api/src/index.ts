@@ -31,6 +31,7 @@ const { PrismaClient } = prismaClient as typeof import("@prisma/client");
 
 const DEFAULT_API_HOST = "127.0.0.1";
 const DEFAULT_API_PORT = 4010;
+const DEFAULT_DATABASE_URL = new URL("../prisma/dev.db", import.meta.url).href;
 const DEFAULT_CORS_ALLOWED_ORIGINS = [
   "http://127.0.0.1:3010",
   "http://localhost:3010",
@@ -63,10 +64,11 @@ type TaskMutationEventType =
   (typeof TASK_MUTATION_EVENT_TYPES)[keyof typeof TASK_MUTATION_EVENT_TYPES];
 
 function createPrismaClient(): PrismaClientType {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (databaseUrl === undefined) {
-    return new PrismaClient();
-  }
+  const configuredDatabaseUrl = process.env.DATABASE_URL;
+  const databaseUrl =
+    configuredDatabaseUrl !== undefined && configuredDatabaseUrl.trim().length > 0
+      ? configuredDatabaseUrl
+      : DEFAULT_DATABASE_URL;
 
   return new PrismaClient({
     datasources: {
