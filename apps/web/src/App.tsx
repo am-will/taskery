@@ -575,6 +575,7 @@ function SortableTaskCard({
       }`}
       data-testid={`task-card-${task.id}`}
       data-task-id={task.id}
+      data-priority={task.priority ?? "MEDIUM"}
       onMouseEnter={() => {
         if (isDragging) {
           return;
@@ -609,7 +610,7 @@ function SortableTaskCard({
           void onDeleteTask(task);
         }}
       >
-        X
+        ×
       </button>
       <p className="task-card-title">{task.title}</p>
       <div className="task-card-meta" aria-hidden="true">
@@ -677,7 +678,10 @@ function Column({
       role="listitem"
       data-column-status={status}
     >
-      <h2>{statusLabels[status]}</h2>
+      <h2>
+        {statusLabels[status]}
+        <span className="column-count">{tasks.length}</span>
+      </h2>
       <div ref={setNodeRef} className="column-body">
         <SortableContext items={tasks.map((task) => taskDragId(task.id))} strategy={verticalListSortingStrategy}>
           {tasks.length === 0 ? <p className="empty-column">Drop tasks here</p> : null}
@@ -1421,7 +1425,7 @@ export function App() {
                 disabled={isSavingEdit}
                 aria-label="Close task editor"
               >
-                X
+                ×
               </button>
             </div>
 
