@@ -1,3 +1,11 @@
+import { spawnSync } from "node:child_process";
+import type { Server } from "node:http";
+import { existsSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { homedir } from "node:os";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   ERROR_CODES,
   type NotificationSettings,
@@ -12,8 +20,11 @@ const EXIT_CODE_NOT_FOUND = 3;
 const EXIT_CODE_CONFLICT = 4;
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
+const DEFAULT_APP_HOST = "127.0.0.1";
+const DEFAULT_APP_PORT = 4010;
+const DEFAULT_TASKERY_DATA_DIR_NAME = ".taskery";
 
-type CommandName = "create" | "list" | "show" | "update" | "move" | "delete" | "settings";
+type CommandName = "create" | "list" | "show" | "update" | "move" | "delete" | "settings" | "up";
 
 type ParsedArgs = {
   json: boolean;
@@ -136,7 +147,8 @@ function isCommandName(value: string): value is CommandName {
     value === "update" ||
     value === "move" ||
     value === "delete" ||
-    value === "settings"
+    value === "settings" ||
+    value === "up"
   );
 }
 
@@ -148,6 +160,7 @@ const ACTION_FLAG_MAPPINGS: ActionFlagMapping[] = [
   { flag: "move", command: "move", positionalName: "task id" },
   { flag: "delete", command: "delete", positionalName: "task id" },
   { flag: "settings", command: "settings", positionalName: "unused" },
+  { flag: "up", command: "up", positionalName: "unused" },
 ];
 
 function normalizeActionFlagCommand(parsed: ParsedArgs): CliFailure | null {
@@ -176,7 +189,12 @@ function normalizeActionFlagCommand(parsed: ParsedArgs): CliFailure | null {
   const rawValue = parsed.flags.get(selected.flag);
   if (typeof rawValue === "string") {
     parsed.positional.unshift(rawValue);
-  } else if (rawValue === true && selected.command !== "list" && selected.command !== "settings") {
+  } else if (
+    rawValue === true &&
+    selected.command !== "list" &&
+    selected.command !== "settings" &&
+    selected.command !== "up"
+  ) {
     const implicitValue = readStringFlag(parsed.flags, "id");
     if (implicitValue === undefined && selected.command !== "create") {
       return toCliFailure(
@@ -207,6 +225,7 @@ function buildHelpText(): string {
     "  move <taskId>     Move task to another status",
     "  delete <taskId>   Delete a task",
     "  settings          Show or update notification settings",
+    "  up                Run Taskery API + Web UI in one process",
     "",
     "Global Flags:",
     "  --json   Emit machine-readable JSON output (default)",
@@ -214,7 +233,7 @@ function buildHelpText(): string {
     "  --help   Show help",
     "",
     "Action Flags:",
-    "  --create | --list | --show | --update | --move | --delete",
+    "  --create | --list | --show | --update | --move | --delete | --up",
     "  --settings",
     "",
     "Command Flags:",
@@ -258,6 +277,10 @@ function buildHelpText(): string {
     "    --weeklyDay <0-6> (0=Sunday, 1=Monday)",
     "    --weeklyHour <0-23>",
     "    --windowMinutes <1-60>",
+    "  up:",
+    "    --host <hostname>   Default 127.0.0.1",
+    "    --port <1-65535>    Default 4010",
+    "    --dataDir <path>    Default ~/.taskery",
     "",
     "Allowed Values:",
     "  STATUS = PENDING | STARTED | BLOCKED | REVIEW | COMPLETE",
@@ -266,6 +289,8 @@ function buildHelpText(): string {
     "Environment:",
     "  CLI_API_BASE_URL       Base URL for API requests",
     "  API_BASE_URL           Fallback if CLI_API_BASE_URL is unset",
+    "  TASKERY_HOME           Data directory (default ~/.taskery)",
+    "  DATABASE_URL           Optional explicit SQLite URL override",
     "",
     "Exit Codes:",
     "  0 success",
@@ -282,6 +307,7 @@ function buildHelpText(): string {
     "  taskery update task_123 --title \"Rename\" --expectedVersion 2",
     "  taskery move task_123 --toStatus REVIEW --expectedVersion 3",
     "  taskery delete task_123 --expectedVersion 4",
+    "  taskery up --port 4010",
     "",
   ].join("\n");
 }
@@ -420,6 +446,196 @@ function parseRequiredString(
     );
   }
   return value;
+}
+
+type BundledAppPaths = {
+  apiEntryPath: string;
+  prismaSchemaPath: string;
+  webDistDir: string;
+};
+
+function resolveRuntimeRoot(): string {
+  const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+  const bundledRuntime = resolve(moduleDirectory, "runtime");
+  if (existsSync(bundledRuntime)) {
+    return bundledRuntime;
+  }
+  return resolve(moduleDirectory, "../dist/runtime");
+}
+
+function resolveBundledAppPaths(): BundledAppPaths | CliFailure {
+  const runtimeRoot = resolveRuntimeRoot();
+  const apiEntryPath = resolve(runtimeRoot, "api/index.js");
+  const prismaSchemaPath = resolve(runtimeRoot, "api/prisma/schema.prisma");
+  const webDistDir = resolve(runtimeRoot, "web");
+
+  if (!existsSync(apiEntryPath) || !existsSync(prismaSchemaPath) || !existsSync(webDistDir)) {
+    return toCliFailure(
+      ERROR_CODES.INTERNAL_ERROR,
+      "Bundled runtime assets are missing. Reinstall taskery or rebuild this workspace package.",
+      EXIT_CODE_INTERNAL,
+    );
+  }
+
+  return { apiEntryPath, prismaSchemaPath, webDistDir };
+}
+
+function resolveDataDirectory(flags: Map<string, string | boolean>): string {
+  const fromFlag = readStringFlag(flags, "dataDir");
+  if (typeof fromFlag === "string" && fromFlag.trim().length > 0) {
+    return resolve(fromFlag);
+  }
+
+  const fromEnv = process.env.TASKERY_HOME;
+  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
+    return resolve(fromEnv);
+  }
+
+  return resolve(homedir(), DEFAULT_TASKERY_DATA_DIR_NAME);
+}
+
+function resolveDatabaseUrl(dataDirectory: string): string {
+  const explicitDatabaseUrl = process.env.DATABASE_URL;
+  if (typeof explicitDatabaseUrl === "string" && explicitDatabaseUrl.trim().length > 0) {
+    return explicitDatabaseUrl.trim();
+  }
+  return `file:${resolve(dataDirectory, "taskery.db")}`;
+}
+
+function runPrismaMigrations(databaseUrl: string, schemaPath: string): CliFailure | null {
+  let prismaCliPath: string;
+  try {
+    const require = createRequire(import.meta.url);
+    prismaCliPath = require.resolve("prisma/build/index.js");
+  } catch {
+    return toCliFailure(
+      ERROR_CODES.INTERNAL_ERROR,
+      "Unable to locate Prisma CLI runtime. Reinstall taskery to restore dependencies.",
+      EXIT_CODE_INTERNAL,
+    );
+  }
+
+  const migrate = spawnSync(
+    process.execPath,
+    [prismaCliPath, "migrate", "deploy", "--schema", schemaPath],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DATABASE_URL: databaseUrl,
+      },
+    },
+  );
+  if (migrate.status === 0) {
+    return null;
+  }
+
+  const stderr = migrate.stderr.trim();
+  const stdout = migrate.stdout.trim();
+  const details = stderr.length > 0 ? stderr : stdout;
+  return toCliFailure(
+    ERROR_CODES.INTERNAL_ERROR,
+    details.length > 0 ? `Database migration failed: ${details}` : "Database migration failed",
+    EXIT_CODE_INTERNAL,
+  );
+}
+
+async function runUp(flags: Map<string, string | boolean>): Promise<number> {
+  const host = readStringFlag(flags, "host") ?? process.env.API_HOST ?? DEFAULT_APP_HOST;
+  const parsedPort = parseIntegerFlag(flags, "port");
+  if (isCliFailure(parsedPort)) {
+    printResult(parsedPort, false);
+    return parsedPort.exitCode;
+  }
+  const port = parsedPort ?? DEFAULT_APP_PORT;
+  if (port < 1 || port > 65535) {
+    const failure = toCliFailure(
+      ERROR_CODES.VALIDATION_ERROR,
+      "Flag --port must be an integer between 1 and 65535",
+      EXIT_CODE_VALIDATION,
+    );
+    printResult(failure, false);
+    return failure.exitCode;
+  }
+
+  const bundledPaths = resolveBundledAppPaths();
+  if (isCliFailure(bundledPaths)) {
+    printResult(bundledPaths, false);
+    return bundledPaths.exitCode;
+  }
+
+  const dataDirectory = resolveDataDirectory(flags);
+  await mkdir(dataDirectory, { recursive: true });
+  const databaseUrl = resolveDatabaseUrl(dataDirectory);
+
+  const migrationFailure = runPrismaMigrations(databaseUrl, bundledPaths.prismaSchemaPath);
+  if (migrationFailure !== null) {
+    printResult(migrationFailure, false);
+    return migrationFailure.exitCode;
+  }
+
+  process.env.API_HOST = host;
+  process.env.API_PORT = String(port);
+  process.env.DATABASE_URL = databaseUrl;
+  process.env.TASKERY_WEB_DIST_DIR = bundledPaths.webDistDir;
+
+  let apiModule: Record<string, unknown>;
+  try {
+    apiModule = (await import(pathToFileURL(bundledPaths.apiEntryPath).href)) as Record<string, unknown>;
+  } catch (error) {
+    const failure = toCliFailure(
+      ERROR_CODES.INTERNAL_ERROR,
+      `Failed to load bundled API module: ${error instanceof Error ? error.message : "unknown error"}`,
+      EXIT_CODE_INTERNAL,
+    );
+    printResult(failure, false);
+    return failure.exitCode;
+  }
+  if (typeof apiModule.startApiServer !== "function") {
+    const failure = toCliFailure(
+      ERROR_CODES.INTERNAL_ERROR,
+      "Bundled API module is invalid (missing startApiServer export).",
+      EXIT_CODE_INTERNAL,
+    );
+    printResult(failure, false);
+    return failure.exitCode;
+  }
+
+  const server = apiModule.startApiServer() as Server;
+  const appUrl = `http://${host}:${port}`;
+  process.stdout.write(`Taskery is running.\n`);
+  process.stdout.write(`Web UI: ${appUrl}\n`);
+  process.stdout.write(`API: ${appUrl}/api/health\n`);
+  process.stdout.write(`Data directory: ${dataDirectory}\n`);
+  process.stdout.write("Press Ctrl+C to stop.\n");
+
+  return await new Promise<number>((resolvePromise) => {
+    let resolved = false;
+    const finalize = (exitCode: number) => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      process.off("SIGINT", onSigint);
+      process.off("SIGTERM", onSigterm);
+      resolvePromise(exitCode);
+    };
+    const shutdown = (signal: "SIGINT" | "SIGTERM") => {
+      process.stdout.write(`\nReceived ${signal}, stopping Taskery...\n`);
+      server.close((error) => {
+        if (error) {
+          process.stderr.write(`Failed to stop cleanly: ${error.message}\n`);
+          finalize(EXIT_CODE_INTERNAL);
+          return;
+        }
+        finalize(EXIT_CODE_SUCCESS);
+      });
+    };
+    const onSigint = () => shutdown("SIGINT");
+    const onSigterm = () => shutdown("SIGTERM");
+    process.on("SIGINT", onSigint);
+    process.on("SIGTERM", onSigterm);
+  });
 }
 
 async function callApi<T>(
@@ -965,6 +1181,10 @@ export async function runTaskboardCli(argv: string[] = process.argv.slice(2)): P
     const helpText = buildHelpText();
     process.stdout.write(helpText);
     return EXIT_CODE_SUCCESS;
+  }
+
+  if (parsed.command === "up") {
+    return runUp(parsed.flags);
   }
 
   const baseUrl = resolveApiBaseUrl();

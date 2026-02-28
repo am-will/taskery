@@ -1,7 +1,7 @@
 {
-  "name": "taskery-cli",
+  "name": "taskery",
   "private": false,
-  "version": "0.1.3",
+  "version": "0.2.0",
   "type": "module",
   "bin": {
     "taskery": "dist/bin/taskboard.js"
@@ -11,12 +11,16 @@
   ],
   "scripts": {
     "dev": "tsx watch src/bin/taskboard.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm --filter taskery-shared build && pnpm --filter @taskboard/api build && pnpm --filter @taskboard/web build && pnpm run build:cli && pnpm run build:runtime",
+    "build:cli": "tsc -p tsconfig.build.json",
+    "build:runtime": "node scripts/build-runtime.mjs",
     "prepack": "pnpm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/**/*.test.mjs"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.2",
+    "prisma": "^6.19.2",
     "taskery-shared": "workspace:*"
   },
   "publishConfig": {

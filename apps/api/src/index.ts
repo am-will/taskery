@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { readFile, stat } from "node:fs/promises";
+import { extname, resolve, sep } from "node:path";
 import {
   PrismaClient,
   type NotificationSettings as PrismaNotificationSettings,
@@ -34,6 +36,19 @@ const TASK_ID_ROUTE_TEMPLATE = "/api/tasks/:id";
 const TASK_MOVE_ROUTE_TEMPLATE = "/api/tasks/:id/move";
 const NOTIFICATION_SETTINGS_ROUTE = "/api/settings/notifications";
 const NOTIFICATION_SETTINGS_ID = "global";
+const STATIC_INDEX_FILE = "index.html";
+const STATIC_CONTENT_TYPES: Record<string, string> = {
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".js": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
+};
 const TASK_MUTATION_EVENT_TYPES = {
   TASK_CREATED: "TASK_CREATED",
   TASK_UPDATED: "TASK_UPDATED",
@@ -148,6 +163,93 @@ function sendApiError(
   details?: unknown,
 ): void {
   sendJson(response, statusCode, buildTaskError(code, message, details));
+}
+
+function sendRaw(
+  response: ServerResponse,
+  statusCode: number,
+  contentType: string,
+  body: Buffer,
+  method: string,
+): void {
+  response.writeHead(statusCode, {
+    "content-type": contentType,
+    "content-length": body.byteLength.toString(),
+  });
+  if (method === "HEAD") {
+    response.end();
+    return;
+  }
+  response.end(body);
+}
+
+function resolveWebDistDir(): string | null {
+  const raw = process.env.TASKERY_WEB_DIST_DIR;
+  if (raw === undefined) {
+    return null;
+  }
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  return resolve(trimmed);
+}
+
+function toStaticFilePath(webDistDir: string, requestPathname: string): string | null {
+  let decodedPathname: string;
+  try {
+    decodedPathname = decodeURIComponent(requestPathname);
+  } catch {
+    return null;
+  }
+  if (decodedPathname.includes("\0")) {
+    return null;
+  }
+
+  const normalizedPathname = decodedPathname === "/" ? `/${STATIC_INDEX_FILE}` : decodedPathname;
+  const resolvedPath = resolve(webDistDir, `.${normalizedPathname}`);
+  if (resolvedPath === webDistDir || resolvedPath.startsWith(`${webDistDir}${sep}`)) {
+    return resolvedPath;
+  }
+  return null;
+}
+
+async function readStaticFileIfPresent(pathname: string): Promise<{ body: Buffer; contentType: string } | null> {
+  if (pathname.startsWith("/api/")) {
+    return null;
+  }
+
+  const webDistDir = resolveWebDistDir();
+  if (webDistDir === null) {
+    return null;
+  }
+
+  const staticPath = toStaticFilePath(webDistDir, pathname);
+  if (staticPath !== null) {
+    try {
+      const staticFile = await stat(staticPath);
+      if (staticFile.isFile()) {
+        const extension = extname(staticPath).toLowerCase();
+        const contentType = STATIC_CONTENT_TYPES[extension] ?? "application/octet-stream";
+        const body = await readFile(staticPath);
+        return { body, contentType };
+      }
+    } catch {
+      // Fall back to SPA index for non-file routes.
+    }
+  }
+
+  if (extname(pathname) !== "") {
+    return null;
+  }
+
+  const indexPath = resolve(webDistDir, STATIC_INDEX_FILE);
+  try {
+    const body = await readFile(indexPath);
+    return { body, contentType: "text/html; charset=utf-8" };
+  } catch {
+    return null;
+  }
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
@@ -711,6 +813,14 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       `Method ${method} is not supported for ${pathname}`,
     );
     return;
+  }
+
+  if (method === "GET" || method === "HEAD") {
+    const staticAsset = await readStaticFileIfPresent(pathname);
+    if (staticAsset !== null) {
+      sendRaw(response, 200, staticAsset.contentType, staticAsset.body, method);
+      return;
+    }
   }
 
   sendApiError(response, 404, ERROR_CODES.VALIDATION_ERROR, `Route ${pathname} was not found`);

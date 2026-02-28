@@ -19,7 +19,27 @@ Most task trackers are built for humans only. When you start working with AI age
 
 ---
 
-## Quick Start
+## Official Install (Complete App)
+
+Install Taskery globally with pnpm:
+
+```bash
+pnpm add -g taskery
+```
+
+Start the full app (API + Web UI in one process):
+
+```bash
+taskery up
+```
+
+Then open **http://127.0.0.1:4010**.
+
+Taskery stores local data in `~/.taskery` by default.
+
+---
+
+## Quick Start From Source (Contributors)
 
 You need **Node.js 18+** and **pnpm**.
 
@@ -66,7 +86,7 @@ Paste this into your agent's system prompt, project instructions, or `AGENTS.md`
 Use Taskery to track work. The API is running at http://localhost:4010.
 
 CLI invocation:
-pnpm --filter taskery-cli exec taskery <command> [flags]
+taskery <command> [flags]
 
 Commands:
   list                          List all tasks (JSON)
@@ -88,24 +108,6 @@ Priorities: LOW, MEDIUM, HIGH, URGENT
 ```
 
 Once your agent has these instructions, it can create tasks from conversations, move them as it completes work, and keep the board updated as it goes.
-
-## Install The Official CLI (Global)
-
-Install the published CLI globally from npm with either pnpm or npm:
-
-```bash
-# pnpm
-pnpm add -g taskery-cli
-
-# npm
-npm install -g taskery-cli
-```
-
-Then run:
-
-```bash
-taskery --help
-```
 
 ### Direct API Access
 
@@ -137,36 +139,40 @@ All responses follow the same envelope:
 The CLI outputs JSON by default so agents can parse it. Help output is always human-readable.
 Add `--text` for human-readable command responses.
 
-If you installed globally (with pnpm or npm), use `taskery ...`. If you're developing inside this repo, use `pnpm --filter taskery-cli exec taskery ...`.
+If you installed globally, use `taskery ...`.
+If you're developing inside this repo, use `pnpm --filter taskery exec taskery ...`.
 
 ```bash
+# Start the complete local app (API + Web UI)
+taskery up
+
 # See all tasks
-pnpm --filter taskery-cli exec taskery list
+taskery list
 
 # Human-readable output
-pnpm --filter taskery-cli exec taskery list --text
+taskery --text list
 
 # Create a task
-pnpm --filter taskery-cli exec taskery create "Write launch blog post" \
+taskery create "Write launch blog post" \
   --assignee "Alex" \
   --priority HIGH \
   --dueAt "2026-03-10"
 
 # Look at a specific task (you'll need the version number for updates)
-pnpm --filter taskery-cli exec taskery show <taskId>
+taskery show <taskId>
 
 # Move a task to a new column
-pnpm --filter taskery-cli exec taskery move <taskId> \
+taskery move <taskId> \
   --toStatus REVIEW \
   --expectedVersion <version>
 
 # Update a task
-pnpm --filter taskery-cli exec taskery update <taskId> \
+taskery update <taskId> \
   --title "Updated title" \
   --expectedVersion <version>
 
 # Delete a task
-pnpm --filter taskery-cli exec taskery delete <taskId> \
+taskery delete <taskId> \
   --expectedVersion <version>
 ```
 
@@ -240,7 +246,7 @@ VITE_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/web dev
 **API unreachable from CLI?** Set the base URL:
 
 ```bash
-API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec taskery list
+API_BASE_URL=http://127.0.0.1:4010 taskery list
 ```
 
 ---

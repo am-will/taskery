@@ -32,6 +32,12 @@ importers:
 
   apps/cli:
     dependencies:
+      '@prisma/client':
+        specifier: ^6.19.2
+        version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
+      prisma:
+        specifier: ^6.19.2
+        version: 6.19.2(typescript@5.9.3)
       taskery-shared:
         specifier: workspace:*
         version: link:../../packages/shared

@@ -15,7 +15,7 @@ Run from workspace root:
 5. Start web:
    - `VITE_API_BASE_URL=http://127.0.0.1:4010 pnpm --filter @taskboard/web dev`
 6. Use CLI:
-   - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts --help`
+   - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts --help`
 
 ## Health Checks
 
@@ -26,7 +26,7 @@ Run from workspace root:
   - `curl -sf http://127.0.0.1:4010/api/tasks`
   - Expected: JSON envelope containing `tasks`
 - CLI reachability to API:
-  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts list`
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts list`
   - Expected exit code `0` with JSON payload (`--json` is default)
 
 ## DB Reset and Seed
@@ -61,21 +61,21 @@ The CLI is deterministic for automation because it defaults to JSON output.
 Examples:
 
 - List tasks for agent parsing:
-  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts list | jq`
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts list | jq`
 - Create task:
-  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts create "Triage prod issue" --priority HIGH --status PENDING`
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts create "Triage prod issue" --priority HIGH --status PENDING`
 - Read notification settings:
-  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts settings`
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts settings`
 - Update notification settings:
-  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts settings --dailyHours 9,14 --weeklyDay 2 --weeklyHour 11`
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts settings --dailyHours 9,14 --weeklyDay 2 --weeklyHour 11`
 - Update task with optimistic version check:
-  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts update <taskId> --title "Updated title" --expectedVersion <version>`
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts update <taskId> --title "Updated title" --expectedVersion <version>`
 - Move task:
-  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts move <taskId> --toStatus REVIEW --expectedVersion <version>`
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts move <taskId> --toStatus REVIEW --expectedVersion <version>`
 - Delete task:
-  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts delete <taskId> --expectedVersion <version>`
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts delete <taskId> --expectedVersion <version>`
 - Human-readable output for operator use:
-  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts list --text`
+  - `API_BASE_URL=http://127.0.0.1:4010 pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts list --text`
 
 ## Exit Codes and Error Behavior
 

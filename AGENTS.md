@@ -27,8 +27,8 @@ Taskery is a local-first Kanban system with three operator surfaces:
   - polls `/api/tasks` every 5s to reconcile CLI/API changes
   - sync indicator states: `syncing`, `synced`, `stale`
 - CLI behavior:
-  - invoke CLI with `pnpm --filter taskery-cli exec node --import tsx src/bin/taskboard.ts <command> [flags]`
-  - command surface: `create`, `list`, `show`, `update`, `move`, `delete`
+  - invoke CLI with `pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts <command> [flags]`
+  - command surface: `create`, `list`, `show`, `update`, `move`, `delete`, `settings`, `up`
   - default output is JSON (use `--text` for human output)
   - use `API_BASE_URL` for non-default API targets in docs/examples
   - exit codes: `0 success`, `1 internal`, `2 validation`, `3 not found`, `4 conflict`

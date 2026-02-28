@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 test("taskery CLI exposes required command surface", () => {
   const help = spawnSync(
     "pnpm",
-    ["--filter", "taskery-cli", "exec", "tsx", "src/bin/taskboard.ts", "--help"],
+    ["--filter", "taskery", "exec", "tsx", "src/bin/taskboard.ts", "--help"],
     {
       cwd: process.cwd(),
       encoding: "utf8",
@@ -23,6 +23,7 @@ test("taskery CLI exposes required command surface", () => {
   assert.match(help.stdout, /\bmove\b/i);
   assert.match(help.stdout, /\bdelete\b/i);
   assert.match(help.stdout, /\bsettings\b/i);
+  assert.match(help.stdout, /\bup\b/i);
   assert.match(help.stdout, /--json/i);
   assert.match(help.stdout, /--text/i);
   assert.match(help.stdout, /--create/i);
@@ -33,7 +34,7 @@ test("taskery CLI exposes required command surface", () => {
 
   const jsonHelp = spawnSync(
     "pnpm",
-    ["--filter", "taskery-cli", "exec", "tsx", "src/bin/taskboard.ts", "--json", "--help"],
+    ["--filter", "taskery", "exec", "tsx", "src/bin/taskboard.ts", "--json", "--help"],
     {
       cwd: process.cwd(),
       encoding: "utf8",

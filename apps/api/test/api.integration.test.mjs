@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readdir } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { before, after, beforeEach, test } from "node:test";
@@ -146,6 +146,37 @@ test("GET /api/health returns status ok", async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(body, { status: "ok" });
+});
+
+test("serves bundled web assets when TASKERY_WEB_DIST_DIR is set", async () => {
+  const webDistDir = await mkdtemp(join(tmpdir(), "taskboard-web-it-"));
+  await mkdir(join(webDistDir, "assets"), { recursive: true });
+  await writeFile(join(webDistDir, "index.html"), "<!doctype html><html><body>Taskery UI</body></html>");
+  await writeFile(join(webDistDir, "assets", "app.js"), "console.log('taskery');");
+
+  const previousWebDistDir = process.env.TASKERY_WEB_DIST_DIR;
+  process.env.TASKERY_WEB_DIST_DIR = webDistDir;
+  try {
+    const routeResponse = await fetch(`${baseUrl}/board/started`);
+    assert.equal(routeResponse.status, 200);
+    assert.match(routeResponse.headers.get("content-type") ?? "", /text\/html/i);
+    assert.match(await routeResponse.text(), /Taskery UI/);
+
+    const assetResponse = await fetch(`${baseUrl}/assets/app.js`);
+    assert.equal(assetResponse.status, 200);
+    assert.match(assetResponse.headers.get("content-type") ?? "", /application\/javascript/i);
+    assert.match(await assetResponse.text(), /taskery/);
+
+    const missingAssetResponse = await requestJson("/assets/missing.js");
+    assert.equal(missingAssetResponse.response.status, 404);
+    assert.equal(missingAssetResponse.body.code, "VALIDATION_ERROR");
+  } finally {
+    if (previousWebDistDir === undefined) {
+      delete process.env.TASKERY_WEB_DIST_DIR;
+    } else {
+      process.env.TASKERY_WEB_DIST_DIR = previousWebDistDir;
+    }
+  }
 });
 
 test("GET /api/settings/notifications returns persisted defaults", async () => {

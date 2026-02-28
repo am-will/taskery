@@ -505,16 +505,22 @@ const toBoardStateFromApiTasks = (tasks: ApiTaskListItem[]): BoardState => {
 
 const getApiBaseUrl = (): string => {
   const configured = import.meta.env.VITE_API_BASE_URL;
-  if (typeof configured !== "string") {
-    return DEFAULT_API_BASE_URL;
+  if (typeof configured === "string") {
+    const trimmed = configured.trim();
+    if (trimmed.length > 0) {
+      return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+    }
   }
 
-  const trimmed = configured.trim();
-  if (trimmed.length === 0) {
-    return DEFAULT_API_BASE_URL;
+  const location = globalThis.location;
+  if (location !== undefined) {
+    if (location.port === "3010") {
+      return `${location.protocol}//${location.hostname}:4010`;
+    }
+    return location.origin;
   }
 
-  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+  return DEFAULT_API_BASE_URL;
 };
 
 const fetchBoardSnapshot = async (): Promise<BoardSnapshot> => {
