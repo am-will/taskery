@@ -105,21 +105,25 @@ This prevents race conditions. Before you move, update, or delete a task, you ru
 
 ## Using Taskery with AI Coding Agents
 
-This is the main reason Taskery exists. Here's how to set it up with different agents.
+This is the main reason Taskery exists. Any CLI agent — Codex, Claude, OpenClaw, or anything else that can run shell commands — can manage tasks on your board.
 
-### Claude Code
+Paste this into your agent's system prompt, project instructions, or `AGENTS.md`:
 
-Add this to your project's `CLAUDE.md` (or paste it at the start of a conversation):
-
-```markdown
+```text
 ## Task Management
 
 Use Taskery to track work. The API is running at http://localhost:4010.
 
-To run CLI commands:
+CLI invocation:
 pnpm --filter taskery-cli exec taskery <command> [flags]
 
-Available commands: list, show, create, update, move, delete
+Commands:
+  list                          List all tasks (JSON)
+  show <id>                     Get one task (includes version)
+  create "title" [--flags]      Create a task
+  update <id> --expectedVersion <v> [--flags]   Update fields
+  move <id> --toStatus STATUS --expectedVersion <v>   Change column
+  delete <id> --expectedVersion <v>   Remove a task
 
 Rules:
 - Always use JSON output (no --text flag) so you can parse the response.
@@ -132,26 +136,7 @@ Statuses: PENDING, STARTED, BLOCKED, REVIEW, COMPLETE
 Priorities: LOW, MEDIUM, HIGH, URGENT
 ```
 
-Claude Code will then be able to create tasks from your conversations, move them as it completes work, and keep the board updated as it goes.
-
-### Codex / Other Terminal Agents
-
-Any agent that can run shell commands can use Taskery. The pattern is the same:
-
-```text
-Task board CLI: pnpm --filter taskery-cli exec taskery <command>
-API: http://localhost:4010
-
-Commands:
-  list                          List all tasks (JSON)
-  show <id>                     Get one task (includes version)
-  create "title" [--flags]      Create a task
-  update <id> --expectedVersion <v> [--flags]   Update fields
-  move <id> --toStatus STATUS --expectedVersion <v>   Change column
-  delete <id> --expectedVersion <v>   Remove a task
-
-Always fetch current version before writing. Handle exit code 4 by retrying.
-```
+Once your agent has these instructions, it can create tasks from conversations, move them as it completes work, and keep the board updated as it goes.
 
 ### Direct API Access
 
