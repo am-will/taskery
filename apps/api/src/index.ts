@@ -1,11 +1,12 @@
+import prismaClient from "@prisma/client";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import {
-  PrismaClient,
+  type PrismaClient as PrismaClientType,
+  type Prisma,
   type NotificationSettings as PrismaNotificationSettings,
   type Task as PrismaTask,
-  type Prisma,
 } from "@prisma/client";
 import {
   DEFAULT_NOTIFICATION_SCHEDULE_CONFIG,
@@ -25,6 +26,8 @@ import {
   type TaskErrorCode,
   type TaskStatus,
 } from "taskery-shared";
+
+const { PrismaClient } = prismaClient as typeof import("@prisma/client");
 
 const DEFAULT_API_HOST = "127.0.0.1";
 const DEFAULT_API_PORT = 4010;
@@ -59,7 +62,7 @@ const TASK_MUTATION_EVENT_TYPES = {
 type TaskMutationEventType =
   (typeof TASK_MUTATION_EVENT_TYPES)[keyof typeof TASK_MUTATION_EVENT_TYPES];
 
-function createPrismaClient(): PrismaClient {
+function createPrismaClient(): PrismaClientType {
   const databaseUrl = process.env.DATABASE_URL;
   if (databaseUrl === undefined) {
     return new PrismaClient();

@@ -502,7 +502,7 @@ function resolveDatabaseUrl(dataDirectory: string): string {
   return `file:${resolve(dataDirectory, "taskery.db")}`;
 }
 
-function runPrismaMigrations(databaseUrl: string, schemaPath: string): CliFailure | null {
+function resolvePrismaCliPath(): string | CliFailure {
   let prismaCliPath: string;
   try {
     const require = createRequire(import.meta.url);
@@ -513,6 +513,45 @@ function runPrismaMigrations(databaseUrl: string, schemaPath: string): CliFailur
       "Unable to locate Prisma CLI runtime. Reinstall taskery to restore dependencies.",
       EXIT_CODE_INTERNAL,
     );
+  }
+  return prismaCliPath;
+}
+
+function runPrismaGenerate(databaseUrl: string, schemaPath: string): CliFailure | null {
+  const prismaCliPath = resolvePrismaCliPath();
+  if (isCliFailure(prismaCliPath)) {
+    return prismaCliPath;
+  }
+
+  const generate = spawnSync(
+    process.execPath,
+    [prismaCliPath, "generate", "--schema", schemaPath],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DATABASE_URL: databaseUrl,
+      },
+    },
+  );
+  if (generate.status === 0) {
+    return null;
+  }
+
+  const stderr = generate.stderr.trim();
+  const stdout = generate.stdout.trim();
+  const details = stderr.length > 0 ? stderr : stdout;
+  return toCliFailure(
+    ERROR_CODES.INTERNAL_ERROR,
+    details.length > 0 ? `Prisma client generation failed: ${details}` : "Prisma client generation failed",
+    EXIT_CODE_INTERNAL,
+  );
+}
+
+function runPrismaMigrations(databaseUrl: string, schemaPath: string): CliFailure | null {
+  const prismaCliPath = resolvePrismaCliPath();
+  if (isCliFailure(prismaCliPath)) {
+    return prismaCliPath;
   }
 
   const migrate = spawnSync(
@@ -567,6 +606,12 @@ async function runUp(flags: Map<string, string | boolean>): Promise<number> {
   const dataDirectory = resolveDataDirectory(flags);
   await mkdir(dataDirectory, { recursive: true });
   const databaseUrl = resolveDatabaseUrl(dataDirectory);
+
+  const generateFailure = runPrismaGenerate(databaseUrl, bundledPaths.prismaSchemaPath);
+  if (generateFailure !== null) {
+    printResult(generateFailure, false);
+    return generateFailure.exitCode;
+  }
 
   const migrationFailure = runPrismaMigrations(databaseUrl, bundledPaths.prismaSchemaPath);
   if (migrationFailure !== null) {
