@@ -34,11 +34,17 @@ describe("task domain contracts", () => {
   it("enforces transition policy", () => {
     expect(isTransitionAllowed("PENDING", "STARTED")).toBe(true);
     expect(isTransitionAllowed("STARTED", "COMPLETE")).toBe(true);
-    expect(isTransitionAllowed("BLOCKED", "PENDING")).toBe(false);
-    expect(isTransitionAllowed("REVIEW", "PENDING")).toBe(false);
-    expect(isTransitionAllowed("COMPLETE", "PENDING")).toBe(false);
+    expect(isTransitionAllowed("BLOCKED", "PENDING")).toBe(true);
+    expect(isTransitionAllowed("REVIEW", "PENDING")).toBe(true);
+    expect(isTransitionAllowed("COMPLETE", "PENDING")).toBe(true);
     expect(isTransitionAllowed("COMPLETE", "COMPLETE")).toBe(true);
-    expect(TASK_TRANSITION_POLICY.COMPLETE).toEqual(["COMPLETE"]);
+    expect(TASK_TRANSITION_POLICY.COMPLETE).toEqual([
+      "PENDING",
+      "STARTED",
+      "BLOCKED",
+      "REVIEW",
+      "COMPLETE",
+    ]);
   });
 
   it("calculates next position from ordered and unordered values", () => {

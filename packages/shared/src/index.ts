@@ -37,10 +37,10 @@ type TaskTransitionPolicy = {
 
 export const TASK_TRANSITION_POLICY: TaskTransitionPolicy = {
   PENDING: ["PENDING", "STARTED", "BLOCKED", "REVIEW", "COMPLETE"],
-  STARTED: ["STARTED", "BLOCKED", "REVIEW", "COMPLETE"],
-  BLOCKED: ["BLOCKED", "STARTED", "REVIEW", "COMPLETE"],
-  REVIEW: ["REVIEW", "STARTED", "BLOCKED", "COMPLETE"],
-  COMPLETE: ["COMPLETE"],
+  STARTED: ["PENDING", "STARTED", "BLOCKED", "REVIEW", "COMPLETE"],
+  BLOCKED: ["PENDING", "STARTED", "BLOCKED", "REVIEW", "COMPLETE"],
+  REVIEW: ["PENDING", "STARTED", "BLOCKED", "REVIEW", "COMPLETE"],
+  COMPLETE: ["PENDING", "STARTED", "BLOCKED", "REVIEW", "COMPLETE"],
 };
 
 export function isTransitionAllowed(from: TaskStatus, to: TaskStatus): boolean {

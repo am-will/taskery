@@ -208,6 +208,23 @@ test("POST /api/tasks/:id/move moves a task successfully", async () => {
   assert.equal(body.task.position, 1000);
 });
 
+test("POST /api/tasks/:id/move allows moving back to PENDING", async () => {
+  const task = await createTask({ title: "Move back to pending", status: "STARTED" });
+
+  const { response, body } = await requestJson(`/api/tasks/${task.id}/move`, {
+    method: "POST",
+    body: JSON.stringify({
+      toStatus: "PENDING",
+      expectedVersion: task.version,
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.task.id, task.id);
+  assert.equal(body.task.status, "PENDING");
+  assert.equal(body.task.version, task.version + 1);
+});
+
 test("POST /api/tasks/:id/move returns 409 conflict for stale expectedVersion", async () => {
   const task = await createTask({ title: "Conflict path" });
 
