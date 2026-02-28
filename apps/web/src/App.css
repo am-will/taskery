@@ -60,10 +60,17 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
   background: var(--bg-base);
+  overflow-x: clip;
 }
 
 /* ── App Root ── */
@@ -71,6 +78,7 @@ body {
   position: relative;
   min-height: 100vh;
   padding: 1.5rem;
+  overflow-x: hidden;
 }
 
 /* Animated ambient glow blobs */
@@ -619,6 +627,9 @@ body {
 /* ── Workflow Column ── */
 .workflow-column {
   position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
   min-height: 460px;
   padding: 0;
   border: 1px solid var(--border-default);
@@ -659,6 +670,7 @@ body {
 
 /* ── Column Body (preserved grid) ── */
 .column-body {
+  flex: 1 1 auto;
   min-height: 390px;
   display: grid;
   grid-auto-rows: max-content;
@@ -674,18 +686,23 @@ body {
     var(--bg-elevated);
 }
 
+.workflow-column:hover {
+  z-index: 40;
+}
+
 .workflow-column.is-over {
   border-color: var(--col-accent);
   box-shadow: inset 0 0 20px var(--col-dim);
 }
 
 .workflow-column:has(.task-hover-popup) {
-  z-index: 10;
+  z-index: 40;
 }
 
 /* ── Task Card ── */
 .task-card {
   position: relative;
+  z-index: 0;
   display: grid;
   gap: 0.35rem;
   border: 1px solid var(--border-default);
@@ -698,6 +715,7 @@ body {
 }
 
 .task-card:hover {
+  z-index: 50;
   border-color: var(--border-strong);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), var(--bg-surface));
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
@@ -890,12 +908,16 @@ body {
   text-align: center;
 }
 
+.task-card:has(.task-hover-popup) {
+  z-index: 50;
+}
+
 /* ── Hover Popup ── */
 .task-hover-popup {
   position: absolute;
   top: -0.2rem;
   left: calc(100% + 0.5rem);
-  z-index: 30;
+  z-index: 80;
   width: min(20rem, 60vw);
   padding: 0.75rem;
   border: 1px solid var(--border-strong);

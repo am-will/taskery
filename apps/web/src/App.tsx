@@ -320,6 +320,24 @@ const findFirstStatusTransition = (
   return null;
 };
 
+const applySingleStatusTransition = (
+  currentBoard: BoardState,
+  transition: StatusTransitionCandidate,
+): BoardState => {
+  const nextBoard = createEmptyBoardState();
+
+  for (const status of BOARD_STATUSES) {
+    nextBoard[status] = currentBoard[status].filter((task) => task.id !== transition.taskId);
+  }
+
+  const destinationTasks = [...nextBoard[transition.toStatus]];
+  const clampedIndex = Math.max(0, Math.min(transition.toIndex, destinationTasks.length));
+  destinationTasks.splice(clampedIndex, 0, transition.nextTask);
+  nextBoard[transition.toStatus] = destinationTasks;
+
+  return nextBoard;
+};
+
 const readReminderFlag = (dedupeKey: string): boolean => {
   try {
     return window.localStorage.getItem(`${REMINDER_STORAGE_PREFIX}${dedupeKey}`) === "1";
@@ -662,6 +680,14 @@ const shouldFlipHoverPopupLeft = (cardRect: DOMRect): boolean => {
   const rightSpace =
     window.innerWidth - cardRect.right - HOVER_POPUP_GAP_PX - HOVER_POPUP_EDGE_PADDING_PX;
   const leftSpace = cardRect.left - HOVER_POPUP_GAP_PX - HOVER_POPUP_EDGE_PADDING_PX;
+  if (rightSpace >= popupWidth) {
+    return false;
+  }
+
+  if (leftSpace >= popupWidth) {
+    return true;
+  }
+
   return leftSpace > rightSpace;
 };
 
@@ -950,57 +976,66 @@ export function App() {
   };
 
   const applyRefreshedBoard = async (nextBoard: BoardState): Promise<void> => {
-    const currentBoard = boardRef.current;
-    const transition = findFirstStatusTransition(currentBoard, nextBoard);
-    if (!transition || draggingTaskId !== null) {
+    if (draggingTaskId !== null) {
       setExternalMoveOverlay(null);
       commitBoardState(nextBoard);
       return;
     }
 
-    const sourceElement = findTaskCardElement(transition.taskId);
-    if (!sourceElement) {
-      setExternalMoveOverlay(null);
-      commitBoardState(nextBoard);
-      return;
-    }
-
-    const sourceRect = toRectSnapshot(sourceElement.getBoundingClientRect());
-    const targetRect = computeExternalMoveTargetRect(
-      transition.toStatus,
-      transition.toIndex,
-      sourceRect.height,
-      sourceRect.width,
-    );
-    if (!targetRect) {
-      setExternalMoveOverlay(null);
-      commitBoardState(nextBoard);
-      return;
-    }
-
-    setExternalMoveOverlay({
-      taskId: transition.taskId,
-      task: transition.nextTask,
-      fromRect: sourceRect,
-      toRect: targetRect,
-      phase: "highlight",
-    });
-
-    await waitForDelay(EXTERNAL_MOVE_HIGHLIGHT_MS);
-    if (isDisposedRef.current) {
-      return;
-    }
-
-    setExternalMoveOverlay((currentOverlay) => {
-      if (!currentOverlay || currentOverlay.taskId !== transition.taskId) {
-        return currentOverlay;
+    while (true) {
+      const transition = findFirstStatusTransition(boardRef.current, nextBoard);
+      if (!transition) {
+        break;
       }
-      return { ...currentOverlay, phase: "moving" };
-    });
 
-    await waitForDelay(EXTERNAL_MOVE_TRAVEL_MS);
-    if (isDisposedRef.current) {
-      return;
+      const sourceElement = findTaskCardElement(transition.taskId);
+      if (!sourceElement) {
+        setExternalMoveOverlay(null);
+        commitBoardState(nextBoard);
+        return;
+      }
+
+      const sourceRect = toRectSnapshot(sourceElement.getBoundingClientRect());
+      const targetRect = computeExternalMoveTargetRect(
+        transition.toStatus,
+        transition.toIndex,
+        sourceRect.height,
+        sourceRect.width,
+      );
+      if (!targetRect) {
+        setExternalMoveOverlay(null);
+        commitBoardState(nextBoard);
+        return;
+      }
+
+      setExternalMoveOverlay({
+        taskId: transition.taskId,
+        task: transition.nextTask,
+        fromRect: sourceRect,
+        toRect: targetRect,
+        phase: "highlight",
+      });
+
+      await waitForDelay(EXTERNAL_MOVE_HIGHLIGHT_MS);
+      if (isDisposedRef.current) {
+        return;
+      }
+
+      setExternalMoveOverlay((currentOverlay) => {
+        if (!currentOverlay || currentOverlay.taskId !== transition.taskId) {
+          return currentOverlay;
+        }
+        return { ...currentOverlay, phase: "moving" };
+      });
+
+      await waitForDelay(EXTERNAL_MOVE_TRAVEL_MS);
+      if (isDisposedRef.current) {
+        return;
+      }
+
+      const progressedBoard = applySingleStatusTransition(boardRef.current, transition);
+      commitBoardState(progressedBoard);
+      setExternalMoveOverlay(null);
     }
 
     commitBoardState(nextBoard);
