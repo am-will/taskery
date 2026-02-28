@@ -1,12 +1,10 @@
 {
   "name": "taskery-cli",
   "private": false,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "bin": {
-    "taskery": "dist/bin/taskboard.js",
-    "taskboard": "dist/bin/taskboard.js",
-    "tasky": "dist/bin/taskboard.js"
+    "taskery": "dist/bin/taskboard.js"
   },
   "files": [
     "dist"
