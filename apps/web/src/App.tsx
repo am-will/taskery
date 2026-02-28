@@ -32,6 +32,7 @@ const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
 const REFRESH_INTERVAL_MS = 5000;
 const EXTERNAL_MOVE_HIGHLIGHT_MS = 280;
 const EXTERNAL_MOVE_TRAVEL_MS = 920;
+const CARD_HOVER_POPUP_DELAY_MS = 500;
 const REMINDER_STORAGE_PREFIX = "taskery:reminder:";
 
 const statusLabels: Record<BoardStatus, string> = {
@@ -503,6 +504,11 @@ const getAssigneeLabel = (
   return getPriorityLabel(priority);
 };
 
+const getAssigneeFieldLabel = (assignee: string | null | undefined): string => {
+  const normalizedAssignee = assignee?.trim() ?? "";
+  return normalizedAssignee.length > 0 ? normalizedAssignee : "Unassigned";
+};
+
 const buildEditDraftFromTask = (task: BoardTask, status: BoardStatus) => ({
   title: task.title,
   status,
@@ -533,11 +539,30 @@ function SortableTaskCard({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: taskDragId(task.id) });
+  const [isHoverPopupVisible, setIsHoverPopupVisible] = useState(false);
+  const hoverPopupTimeoutRef = useRef<number | null>(null);
   const dueVisualState = getDueVisualState(task.dueAt, status);
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  const clearHoverPopupTimeout = () => {
+    if (hoverPopupTimeoutRef.current !== null) {
+      window.clearTimeout(hoverPopupTimeoutRef.current);
+      hoverPopupTimeoutRef.current = null;
+    }
+  };
+
+  useEffect(
+    () => () => {
+      if (hoverPopupTimeoutRef.current !== null) {
+        window.clearTimeout(hoverPopupTimeoutRef.current);
+        hoverPopupTimeoutRef.current = null;
+      }
+    },
+    [],
+  );
 
   return (
     <article
@@ -550,6 +575,20 @@ function SortableTaskCard({
       }`}
       data-testid={`task-card-${task.id}`}
       data-task-id={task.id}
+      onMouseEnter={() => {
+        if (isDragging) {
+          return;
+        }
+        clearHoverPopupTimeout();
+        hoverPopupTimeoutRef.current = window.setTimeout(() => {
+          setIsHoverPopupVisible(true);
+          hoverPopupTimeoutRef.current = null;
+        }, CARD_HOVER_POPUP_DELAY_MS);
+      }}
+      onMouseLeave={() => {
+        clearHoverPopupTimeout();
+        setIsHoverPopupVisible(false);
+      }}
       onClick={() => {
         if (!isDragging) {
           onOpenTask(task, status);
@@ -577,6 +616,38 @@ function SortableTaskCard({
         <span className="task-chip">{getAssigneeLabel(task.assignee, task.priority)}</span>
         <span className="task-chip">{formatDueDateLabel(task.dueAt)}</span>
       </div>
+      {isHoverPopupVisible ? (
+        <aside
+          className="task-hover-popup"
+          role="tooltip"
+          data-testid={`task-hover-popup-${task.id}`}
+          aria-label={`Task details for ${task.title}`}
+        >
+          <p className="task-hover-popup-title">Task Details</p>
+          <dl className="task-hover-popup-list">
+            <div>
+              <dt>Title</dt>
+              <dd>{task.title}</dd>
+            </div>
+            <div>
+              <dt>Priority</dt>
+              <dd>{getPriorityLabel(task.priority)}</dd>
+            </div>
+            <div>
+              <dt>Due Date</dt>
+              <dd>{formatDueDateLabel(task.dueAt)}</dd>
+            </div>
+            <div>
+              <dt>Assignee</dt>
+              <dd>{getAssigneeFieldLabel(task.assignee)}</dd>
+            </div>
+            <div>
+              <dt>Notes</dt>
+              <dd>{(task.notes ?? "").trim().length > 0 ? task.notes : "No notes"}</dd>
+            </div>
+          </dl>
+        </aside>
+      ) : null}
     </article>
   );
 }
