@@ -140,7 +140,8 @@ The CLI outputs JSON by default so agents can parse it. Help output is always hu
 Add `--text` for human-readable command responses.
 
 If you installed globally, use `taskery ...`.
-If you're developing inside this repo, use `pnpm --filter taskery exec taskery ...`.
+If you're developing inside this repo, use
+`pnpm --filter taskery exec node --import tsx src/bin/taskboard.ts ...`.
 
 ```bash
 # Start the complete local app (API + Web UI)
