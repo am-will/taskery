@@ -8,9 +8,15 @@ export const BOARD_STATUSES = [
 
 export type BoardStatus = (typeof BOARD_STATUSES)[number];
 
+export type BoardTaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+
 export type BoardTask = {
   id: string;
   title: string;
+  priority?: BoardTaskPriority;
+  dueAt?: string | null;
+  assignee?: string | null;
+  notes?: string | null;
   version?: number;
 };
 

@@ -7,6 +7,8 @@
   --industrial-muted: #8f9caf;
   --industrial-accent: #7ca9ff;
   --industrial-shadow: 0 20px 48px rgba(0, 0, 0, 0.42);
+  --industrial-positive: #78e4b1;
+  --industrial-warning: #ffa263;
   color: var(--industrial-text);
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 }
@@ -26,16 +28,16 @@ body {
 
 .app-root {
   min-height: 100vh;
-  padding: 2.5rem;
+  padding: 2rem;
 }
 
 .board-shell {
-  width: min(1360px, 100%);
+  width: min(1380px, 100%);
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: 1.4rem;
   border: 1px solid var(--industrial-border);
-  border-radius: 14px;
-  background: rgba(18, 22, 29, 0.88);
+  border-radius: 16px;
+  background: rgba(18, 22, 29, 0.9);
   box-shadow: var(--industrial-shadow);
 }
 
@@ -44,7 +46,7 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--industrial-border);
 }
@@ -56,9 +58,9 @@ body {
 }
 
 .board-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -101,15 +103,9 @@ body {
   background: rgba(220, 116, 58, 0.2);
 }
 
-.workflow-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(200px, 1fr));
-  gap: 0.9rem;
-}
-
 .editor-panel {
-  margin-bottom: 1rem;
-  padding: 0.9rem;
+  margin-bottom: 0.95rem;
+  padding: 0.95rem;
   border: 1px solid var(--industrial-border);
   border-radius: 10px;
   background:
@@ -127,7 +123,8 @@ body {
   border-bottom: 1px dashed rgba(143, 156, 175, 0.4);
 }
 
-.editor-panel-header h2 {
+.editor-panel-header h2,
+.task-modal-header h2 {
   margin: 0;
   color: var(--industrial-accent);
   font-size: 0.9rem;
@@ -160,13 +157,18 @@ body {
   cursor: not-allowed;
 }
 
-.task-form {
+.task-form,
+.task-modal-form {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
   gap: 0.8rem;
 }
 
-.task-form label {
+.task-form {
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+}
+
+.task-form label,
+.task-modal-form label {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -177,13 +179,17 @@ body {
   text-transform: uppercase;
 }
 
-.task-form label:last-child {
+.task-form label:last-child,
+.task-modal-notes {
   grid-column: 1 / -1;
 }
 
 .task-form input,
 .task-form select,
-.task-form textarea {
+.task-form textarea,
+.task-modal-form input,
+.task-modal-form select,
+.task-modal-form textarea {
   border: 1px solid rgba(143, 156, 175, 0.45);
   border-radius: 8px;
   background: var(--industrial-panel-strong);
@@ -193,9 +199,16 @@ body {
   padding: 0.5rem 0.6rem;
 }
 
-.task-form textarea {
+.task-form textarea,
+.task-modal-form textarea {
   min-height: 86px;
   resize: vertical;
+}
+
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(210px, 1fr));
+  gap: 0.9rem;
 }
 
 .workflow-column {
@@ -240,12 +253,20 @@ body {
 
 .task-card {
   position: relative;
+  display: grid;
+  gap: 0.45rem;
   border: 1px solid rgba(124, 169, 255, 0.4);
   border-radius: 8px;
-  padding: 0.7rem 1.75rem 0.55rem 0.6rem;
+  padding: 0.7rem 1.75rem 0.6rem 0.6rem;
   background: linear-gradient(180deg, rgba(124, 169, 255, 0.14), rgba(22, 27, 34, 0.95));
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
   cursor: grab;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.task-card:hover {
+  border-color: rgba(138, 186, 255, 0.95);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
 }
 
 .task-card:focus-visible {
@@ -253,10 +274,37 @@ body {
   outline-offset: 2px;
 }
 
-.task-card p {
+.task-card-title {
   margin: 0;
   color: var(--industrial-text);
-  font-size: 0.83rem;
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+
+.task-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.task-chip {
+  border: 1px solid rgba(124, 169, 255, 0.35);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  font-size: 0.7rem;
+  color: rgba(198, 216, 247, 0.9);
+  background: rgba(124, 169, 255, 0.1);
+}
+
+.task-card-delete,
+.task-modal-close,
+.task-modal-actions button {
+  border: 1px solid rgba(143, 156, 175, 0.45);
+  border-radius: 6px;
+  background: rgba(31, 38, 48, 0.88);
+  color: var(--industrial-text);
+  font: inherit;
+  cursor: pointer;
 }
 
 .task-card-delete {
@@ -265,36 +313,37 @@ body {
   right: 0.28rem;
   width: 1rem;
   height: 1rem;
-  border: 1px solid rgba(255, 115, 115, 0.75);
-  border-radius: 4px;
   padding: 0;
+  border-color: rgba(255, 115, 115, 0.75);
   background: rgba(168, 43, 43, 0.24);
   color: #ff8e8e;
-  font: inherit;
   font-size: 0.72rem;
   font-weight: 700;
   line-height: 1;
-  cursor: pointer;
 }
 
-.task-card-delete:hover:not(:disabled) {
+.task-card-delete:hover:not(:disabled),
+.task-modal-close:hover:not(:disabled) {
   border-color: rgba(255, 132, 132, 0.98);
   background: rgba(198, 57, 57, 0.34);
   color: #ffc0c0;
 }
 
-.task-card-delete:disabled {
+.task-card-delete:disabled,
+.task-modal-close:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.task-card-delete:focus-visible {
+.task-card-delete:focus-visible,
+.task-modal-close:focus-visible,
+.task-modal-actions button:focus-visible {
   outline: 2px solid rgba(255, 132, 132, 0.92);
   outline-offset: 1px;
 }
 
 .task-card.is-dragging {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: grabbing;
 }
 
@@ -308,4 +357,116 @@ body {
   color: rgba(143, 156, 175, 0.85);
   font-size: 0.78rem;
   letter-spacing: 0.03em;
+}
+
+.task-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(4, 7, 12, 0.68);
+  backdrop-filter: blur(2px);
+  z-index: 20;
+}
+
+.task-modal {
+  width: min(760px, 100%);
+  max-height: min(92vh, 760px);
+  overflow: auto;
+  border: 1px solid rgba(124, 169, 255, 0.45);
+  border-radius: 12px;
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, rgba(124, 169, 255, 0.1), transparent 45%),
+    var(--industrial-panel);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.44);
+}
+
+.task-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px dashed rgba(143, 156, 175, 0.4);
+}
+
+.task-modal-close {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-color: rgba(255, 115, 115, 0.75);
+  background: rgba(168, 43, 43, 0.24);
+  color: #ff8e8e;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.task-modal-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.task-modal-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.task-modal-actions button {
+  padding: 0.45rem 0.75rem;
+}
+
+.task-modal-save-button {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.task-modal-actions button:first-child:hover:enabled {
+  border-color: rgba(143, 156, 175, 0.75);
+  background: rgba(44, 55, 72, 0.85);
+}
+
+@media (max-width: 1100px) {
+  .app-root {
+    padding: 1rem;
+  }
+
+  .workflow-grid {
+    grid-template-columns: repeat(2, minmax(230px, 1fr));
+  }
+
+  .task-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .board-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .board-header-meta {
+    justify-items: start;
+  }
+
+  .task-form,
+  .task-modal-form,
+  .workflow-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-column {
+    min-height: 320px;
+  }
+
+  .column-body {
+    min-height: 250px;
+  }
+
+  .task-modal {
+    padding: 0.85rem;
+  }
 }

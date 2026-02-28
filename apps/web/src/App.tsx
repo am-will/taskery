@@ -1,8 +1,20 @@
 import "./App.css";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { DragEndEvent } from "@dnd-kit/core";
-import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useDroppable } from "@dnd-kit/core";
 import {
@@ -10,6 +22,7 @@ import {
   type BoardState,
   type BoardStatus,
   type BoardTask,
+  type BoardTaskPriority,
   createEmptyBoardState,
   moveTaskCard,
 } from "./board/kanban-state";
@@ -25,7 +38,25 @@ const statusLabels: Record<BoardStatus, string> = {
   COMPLETE: "Complete",
 };
 
-const defaultTaskDraft = {
+const priorityToApiValue = {
+  Low: "LOW",
+  Medium: "MEDIUM",
+  High: "HIGH",
+  Critical: "URGENT",
+} as const;
+
+type TaskDraftPriority = keyof typeof priorityToApiValue;
+type CreateTaskDraft = {
+  title: string;
+  priority: TaskDraftPriority;
+  dueDate: string;
+  assignee: string;
+  notes: string;
+};
+type EditTaskDraft = CreateTaskDraft & { status: BoardStatus };
+type ApiTaskPriority = BoardTaskPriority;
+
+const defaultCreateTaskDraft: CreateTaskDraft = {
   title: "",
   priority: "Medium",
   dueDate: "",
@@ -33,11 +64,16 @@ const defaultTaskDraft = {
   notes: "",
 };
 
-const priorityToApiValue: Record<string, "LOW" | "MEDIUM" | "HIGH" | "URGENT"> = {
-  Low: "LOW",
-  Medium: "MEDIUM",
-  High: "HIGH",
-  Critical: "URGENT",
+const defaultEditTaskDraft: EditTaskDraft = {
+  ...defaultCreateTaskDraft,
+  status: "PENDING",
+};
+
+const apiPriorityToDraftValue: Record<ApiTaskPriority, TaskDraftPriority> = {
+  LOW: "Low",
+  MEDIUM: "Medium",
+  HIGH: "High",
+  URGENT: "Critical",
 };
 
 const taskDragId = (taskId: string) => `task:${taskId}`;
@@ -61,12 +97,21 @@ type ApiTaskListItem = {
   id: string;
   title: string;
   status: string;
+  priority: ApiTaskPriority;
+  dueAt: string | null;
+  assignee: string | null;
+  notes: string | null;
   position: number;
   version: number;
 };
 
 type ApiTaskListResponse = {
   tasks?: unknown;
+};
+
+type TaskRecord = {
+  status: BoardStatus;
+  task: BoardTask;
 };
 
 const findTaskLocation = (board: BoardState, taskId: string) => {
@@ -77,6 +122,36 @@ const findTaskLocation = (board: BoardState, taskId: string) => {
     }
   }
   return null;
+};
+
+const findTaskRecord = (board: BoardState, taskId: string): TaskRecord | null => {
+  const location = findTaskLocation(board, taskId);
+  if (!location) {
+    return null;
+  }
+
+  const task = board[location.status][location.index];
+  if (!task) {
+    return null;
+  }
+
+  return { status: location.status, task };
+};
+
+const parseNullableString = (value: unknown): string | null => {
+  if (value === null) {
+    return null;
+  }
+
+  return typeof value === "string" ? value : null;
+};
+
+const parseApiPriority = (value: unknown): ApiTaskPriority => {
+  if (value === "LOW" || value === "MEDIUM" || value === "HIGH" || value === "URGENT") {
+    return value;
+  }
+
+  return "MEDIUM";
 };
 
 const parseApiTask = (value: unknown): ApiTaskListItem | null => {
@@ -96,7 +171,17 @@ const parseApiTask = (value: unknown): ApiTaskListItem | null => {
     return null;
   }
 
-  return { id, title, status, position, version };
+  return {
+    id,
+    title,
+    status,
+    priority: parseApiPriority(record.priority),
+    dueAt: parseNullableString(record.dueAt),
+    assignee: parseNullableString(record.assignee),
+    notes: parseNullableString(record.notes),
+    position,
+    version,
+  };
 };
 
 const isBoardStatus = (value: string): value is BoardStatus =>
@@ -112,7 +197,16 @@ const toBoardStateFromApiTasks = (tasks: ApiTaskListItem[]): BoardState => {
     if (!isBoardStatus(task.status)) {
       continue;
     }
-    nextBoard[task.status].push({ id: task.id, title: task.title, version: task.version });
+
+    nextBoard[task.status].push({
+      id: task.id,
+      title: task.title,
+      priority: task.priority,
+      dueAt: task.dueAt,
+      assignee: task.assignee,
+      notes: task.notes,
+      version: task.version,
+    });
   }
 
   return nextBoard;
@@ -161,13 +255,62 @@ const syncStatusMessage = (status: BoardSyncStatus): string => {
   return "Sync in progress. Checking for CLI updates.";
 };
 
+const toDateInputValue = (isoDate: string | null | undefined): string => {
+  if (typeof isoDate !== "string") {
+    return "";
+  }
+
+  return isoDate.slice(0, 10);
+};
+
+const toApiDueAt = (dueDate: string): string | null =>
+  dueDate.trim().length === 0 ? null : `${dueDate}T17:00:00.000Z`;
+
+const formatDueDateLabel = (dueAt: string | null | undefined): string => {
+  const dueDate = toDateInputValue(dueAt);
+  return dueDate.length > 0 ? dueDate : "No due date";
+};
+
+const getPriorityLabel = (priority: ApiTaskPriority | undefined): string => {
+  if (priority === "LOW") {
+    return "Low";
+  }
+
+  if (priority === "HIGH") {
+    return "High";
+  }
+
+  if (priority === "URGENT") {
+    return "Critical";
+  }
+
+  return "Medium";
+};
+
+const buildEditDraftFromTask = (task: BoardTask, status: BoardStatus) => ({
+  title: task.title,
+  status,
+  priority: apiPriorityToDraftValue[task.priority ?? "MEDIUM"],
+  dueDate: toDateInputValue(task.dueAt),
+  assignee: task.assignee ?? "",
+  notes: task.notes ?? "",
+});
+
+const stopEventPropagation = (event: { stopPropagation: () => void }) => {
+  event.stopPropagation();
+};
+
 function SortableTaskCard({
+  status,
   task,
   onDeleteTask,
+  onOpenTask,
   isDeleting,
 }: {
+  status: BoardStatus;
   task: BoardTask;
   onDeleteTask: (task: BoardTask) => Promise<void>;
+  onOpenTask: (task: BoardTask, status: BoardStatus) => void;
   isDeleting: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -176,15 +319,18 @@ function SortableTaskCard({
     transform: CSS.Transform.toString(transform),
     transition,
   };
-  const stopEventPropagation = (event: { stopPropagation: () => void }) => {
-    event.stopPropagation();
-  };
 
   return (
     <article
       ref={setNodeRef}
       style={style}
       className={`task-card${isDragging ? " is-dragging" : ""}`}
+      data-testid={`task-card-${task.id}`}
+      onClick={() => {
+        if (!isDragging) {
+          onOpenTask(task, status);
+        }
+      }}
       {...attributes}
       {...listeners}
     >
@@ -202,7 +348,11 @@ function SortableTaskCard({
       >
         X
       </button>
-      <p>{task.title}</p>
+      <p className="task-card-title">{task.title}</p>
+      <div className="task-card-meta" aria-hidden="true">
+        <span className="task-chip">{getPriorityLabel(task.priority)}</span>
+        <span className="task-chip">{formatDueDateLabel(task.dueAt)}</span>
+      </div>
     </article>
   );
 }
@@ -211,11 +361,13 @@ function Column({
   status,
   tasks,
   onDeleteTask,
+  onOpenTask,
   deletingTaskIds,
 }: {
   status: BoardStatus;
   tasks: BoardTask[];
   onDeleteTask: (task: BoardTask) => Promise<void>;
+  onOpenTask: (task: BoardTask, status: BoardStatus) => void;
   deletingTaskIds: Set<string>;
 }) {
   const { isOver, setNodeRef } = useDroppable({
@@ -231,8 +383,10 @@ function Column({
           {tasks.map((task) => (
             <SortableTaskCard
               key={task.id}
+              status={status}
               task={task}
               onDeleteTask={onDeleteTask}
+              onOpenTask={onOpenTask}
               isDeleting={deletingTaskIds.has(task.id)}
             />
           ))}
@@ -243,15 +397,22 @@ function Column({
 }
 
 export function App() {
-  const [taskDraft, setTaskDraft] = useState(defaultTaskDraft);
+  const [createTaskDraft, setCreateTaskDraft] = useState(defaultCreateTaskDraft);
   const [board, setBoard] = useState<BoardState>(createEmptyBoardState);
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editTaskDraft, setEditTaskDraft] = useState(defaultEditTaskDraft);
   const [syncStatus, setSyncStatus] = useState<BoardSyncStatus>("syncing");
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingTaskIds, setDeletingTaskIds] = useState<Set<string>>(new Set());
   const refreshPromiseRef = useRef<Promise<void> | null>(null);
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
@@ -307,27 +468,56 @@ export function App() {
     };
   }, []);
 
-  const updateTaskDraft = (field: keyof typeof defaultTaskDraft, value: string) => {
-    setTaskDraft((current) => ({ ...current, [field]: value }));
+  useEffect(() => {
+    if (editingTaskId && !findTaskRecord(board, editingTaskId)) {
+      setEditingTaskId(null);
+    }
+  }, [board, editingTaskId]);
+
+  useEffect(() => {
+    if (!editingTaskId) {
+      return;
+    }
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isSavingEdit) {
+        setEditingTaskId(null);
+      }
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [editingTaskId, isSavingEdit]);
+
+  const updateCreateTaskDraft = <K extends keyof CreateTaskDraft>(
+    field: K,
+    value: CreateTaskDraft[K],
+  ) => {
+    setCreateTaskDraft((current) => ({ ...current, [field]: value }));
   };
 
-  const activeTask = activeTaskId ? findTaskLocation(board, activeTaskId) : null;
-  const activeTaskCard =
-    activeTaskId && activeTask
-      ? board[activeTask.status].find((task) => task.id === activeTaskId) ?? null
-      : null;
+  const updateEditTaskDraft = <K extends keyof EditTaskDraft>(
+    field: K,
+    value: EditTaskDraft[K],
+  ) => {
+    setEditTaskDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const draggingTaskRecord = draggingTaskId ? findTaskRecord(board, draggingTaskId) : null;
 
   const handleDragStart = (event: { active: { id: string | number } }) => {
     const parsedTaskId = parseTaskId(String(event.active.id));
-    setActiveTaskId(parsedTaskId);
+    setDraggingTaskId(parsedTaskId);
   };
 
   const handleDragCancel = () => {
-    setActiveTaskId(null);
+    setDraggingTaskId(null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveTaskId(null);
+    setDraggingTaskId(null);
     if (!event.over) {
       return;
     }
@@ -376,15 +566,19 @@ export function App() {
       return;
     }
 
+    if (overColumn === null) {
+      return;
+    }
+
     setBoard((currentBoard) =>
       moveTaskCard(currentBoard, {
         taskId: activeId,
         fromStatus: activeLocation.status,
-        toStatus: overColumn!,
-        toIndex: currentBoard[overColumn!].length,
+        toStatus: overColumn,
+        toIndex: currentBoard[overColumn].length,
       }),
     );
-    void persistMove(activeTaskCardRecord, overColumn!, board[overColumn!].length);
+    void persistMove(activeTaskCardRecord, overColumn, board[overColumn].length);
   };
 
   const persistMove = async (
@@ -415,21 +609,22 @@ export function App() {
 
   const handleCreateTask = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const normalizedTitle = taskDraft.title.trim();
+    const normalizedTitle = createTaskDraft.title.trim();
     if (normalizedTitle.length === 0 || isSavingDraft) {
       return;
     }
 
-    const priority = priorityToApiValue[taskDraft.priority] ?? "MEDIUM";
-    const assignee = taskDraft.assignee.trim();
-    const notes = taskDraft.notes.trim();
+    const priority = priorityToApiValue[createTaskDraft.priority] ?? "MEDIUM";
+    const assignee = createTaskDraft.assignee.trim();
+    const notes = createTaskDraft.notes.trim();
     const payload: Record<string, unknown> = {
       title: normalizedTitle,
       priority,
       status: "PENDING",
     };
-    if (taskDraft.dueDate.trim().length > 0) {
-      payload.dueAt = `${taskDraft.dueDate}T17:00:00.000Z`;
+    const dueAt = toApiDueAt(createTaskDraft.dueDate);
+    if (dueAt !== null) {
+      payload.dueAt = dueAt;
     }
     if (assignee.length > 0) {
       payload.assignee = assignee;
@@ -449,7 +644,7 @@ export function App() {
       if (!response.ok) {
         throw new Error(`Create failed with status ${response.status}`);
       }
-      setTaskDraft(defaultTaskDraft);
+      setCreateTaskDraft(defaultCreateTaskDraft);
       await refreshBoardFromApi(false);
     } catch {
       setSyncStatus("stale");
@@ -480,7 +675,8 @@ export function App() {
       if (!response.ok) {
         throw new Error(`Delete failed with status ${response.status}`);
       }
-      setActiveTaskId((currentTaskId) => (currentTaskId === task.id ? null : currentTaskId));
+      setDraggingTaskId((currentTaskId) => (currentTaskId === task.id ? null : currentTaskId));
+      setEditingTaskId((currentTaskId) => (currentTaskId === task.id ? null : currentTaskId));
       await refreshBoardFromApi(false);
     } catch {
       setSyncStatus("stale");
@@ -491,6 +687,121 @@ export function App() {
         next.delete(task.id);
         return next;
       });
+    }
+  };
+
+  const handleOpenTaskEditor = (task: BoardTask, status: BoardStatus) => {
+    setEditingTaskId(task.id);
+    setEditTaskDraft(buildEditDraftFromTask(task, status));
+  };
+
+  const handleCloseTaskEditor = () => {
+    if (isSavingEdit) {
+      return;
+    }
+    setEditingTaskId(null);
+  };
+
+  const handleSaveTaskEdits = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (editingTaskId === null || isSavingEdit) {
+      return;
+    }
+
+    const taskRecord = findTaskRecord(board, editingTaskId);
+    if (!taskRecord) {
+      setEditingTaskId(null);
+      return;
+    }
+
+    const normalizedTitle = editTaskDraft.title.trim();
+    if (normalizedTitle.length === 0) {
+      return;
+    }
+
+    const currentTask = taskRecord.task;
+    const currentStatus = taskRecord.status;
+    const nextPriority = priorityToApiValue[editTaskDraft.priority] ?? "MEDIUM";
+    const nextAssignee = editTaskDraft.assignee.trim();
+    const nextNotes = editTaskDraft.notes.trim();
+    const nextDueDate = toDateInputValue(toApiDueAt(editTaskDraft.dueDate));
+
+    const updatePayload: Record<string, unknown> = {};
+    if (normalizedTitle !== currentTask.title) {
+      updatePayload.title = normalizedTitle;
+    }
+    if (nextPriority !== (currentTask.priority ?? "MEDIUM")) {
+      updatePayload.priority = nextPriority;
+    }
+    if (nextDueDate !== toDateInputValue(currentTask.dueAt)) {
+      updatePayload.dueAt = nextDueDate.length === 0 ? null : toApiDueAt(nextDueDate);
+    }
+    if (nextAssignee !== (currentTask.assignee ?? "")) {
+      updatePayload.assignee = nextAssignee.length === 0 ? null : nextAssignee;
+    }
+    if (nextNotes !== (currentTask.notes ?? "")) {
+      updatePayload.notes = nextNotes.length === 0 ? null : nextNotes;
+    }
+
+    const statusChanged = editTaskDraft.status !== currentStatus;
+    if (Object.keys(updatePayload).length === 0 && !statusChanged) {
+      setEditingTaskId(null);
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setSyncStatus("syncing");
+
+    try {
+      let expectedVersion = currentTask.version ?? 1;
+
+      if (Object.keys(updatePayload).length > 0) {
+        updatePayload.expectedVersion = expectedVersion;
+        const patchResponse = await fetch(`${getApiBaseUrl()}/api/tasks/${currentTask.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(updatePayload),
+        });
+
+        if (!patchResponse.ok) {
+          throw new Error(`Update failed with status ${patchResponse.status}`);
+        }
+
+        const patchPayload = (await patchResponse.json()) as {
+          task?: {
+            version?: unknown;
+          };
+        };
+        expectedVersion =
+          typeof patchPayload.task?.version === "number"
+            ? patchPayload.task.version
+            : expectedVersion + 1;
+      }
+
+      if (statusChanged) {
+        const nextColumnLength = board[editTaskDraft.status].length;
+        const moveResponse = await fetch(`${getApiBaseUrl()}/api/tasks/${currentTask.id}/move`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            toStatus: editTaskDraft.status,
+            toPosition: (nextColumnLength + 1) * 1000,
+            expectedVersion,
+          }),
+        });
+
+        if (!moveResponse.ok) {
+          throw new Error(`Status update failed with status ${moveResponse.status}`);
+        }
+      }
+
+      setEditingTaskId(null);
+      await refreshBoardFromApi(false);
+    } catch {
+      setSyncStatus("stale");
+      await refreshBoardFromApi(true);
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -519,7 +830,7 @@ export function App() {
 
         <section className="editor-panel" aria-label="Task editor">
           <div className="editor-panel-header">
-            <h2>Task Editor</h2>
+            <h2>Create Task</h2>
             <button
               type="submit"
               form="task-editor-form"
@@ -541,8 +852,8 @@ export function App() {
               <input
                 id="task-title"
                 name="title"
-                value={taskDraft.title}
-                onChange={(event) => updateTaskDraft("title", event.target.value)}
+                value={createTaskDraft.title}
+                onChange={(event) => updateCreateTaskDraft("title", event.target.value)}
                 type="text"
               />
             </label>
@@ -552,8 +863,10 @@ export function App() {
               <select
                 id="task-priority"
                 name="priority"
-                value={taskDraft.priority}
-                onChange={(event) => updateTaskDraft("priority", event.target.value)}
+                value={createTaskDraft.priority}
+                onChange={(event) =>
+                  updateCreateTaskDraft("priority", event.target.value as TaskDraftPriority)
+                }
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -567,8 +880,8 @@ export function App() {
               <input
                 id="task-due-date"
                 name="dueDate"
-                value={taskDraft.dueDate}
-                onChange={(event) => updateTaskDraft("dueDate", event.target.value)}
+                value={createTaskDraft.dueDate}
+                onChange={(event) => updateCreateTaskDraft("dueDate", event.target.value)}
                 type="date"
               />
             </label>
@@ -578,8 +891,8 @@ export function App() {
               <input
                 id="task-assignee"
                 name="assignee"
-                value={taskDraft.assignee}
-                onChange={(event) => updateTaskDraft("assignee", event.target.value)}
+                value={createTaskDraft.assignee}
+                onChange={(event) => updateCreateTaskDraft("assignee", event.target.value)}
                 type="text"
               />
             </label>
@@ -589,8 +902,8 @@ export function App() {
               <textarea
                 id="task-notes"
                 name="notes"
-                value={taskDraft.notes}
-                onChange={(event) => updateTaskDraft("notes", event.target.value)}
+                value={createTaskDraft.notes}
+                onChange={(event) => updateCreateTaskDraft("notes", event.target.value)}
               />
             </label>
           </form>
@@ -609,19 +922,137 @@ export function App() {
                 status={status}
                 tasks={board[status]}
                 onDeleteTask={handleDeleteTask}
+                onOpenTask={handleOpenTaskEditor}
                 deletingTaskIds={deletingTaskIds}
               />
             ))}
           </section>
           <DragOverlay>
-            {activeTaskCard ? (
+            {draggingTaskRecord ? (
               <article className="task-card overlay">
-                <p>{activeTaskCard.title}</p>
+                <p className="task-card-title">{draggingTaskRecord.task.title}</p>
+                <div className="task-card-meta" aria-hidden="true">
+                  <span className="task-chip">{getPriorityLabel(draggingTaskRecord.task.priority)}</span>
+                  <span className="task-chip">{formatDueDateLabel(draggingTaskRecord.task.dueAt)}</span>
+                </div>
               </article>
             ) : null}
           </DragOverlay>
         </DndContext>
       </section>
+
+      {editingTaskId ? (
+        <div
+          className="task-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              handleCloseTaskEditor();
+            }
+          }}
+        >
+          <section className="task-modal" role="dialog" aria-modal="true" aria-label="Edit task details">
+            <div className="task-modal-header">
+              <h2>Edit Task</h2>
+              <button
+                type="button"
+                className="task-modal-close"
+                onClick={handleCloseTaskEditor}
+                disabled={isSavingEdit}
+                aria-label="Close task editor"
+              >
+                X
+              </button>
+            </div>
+
+            <form className="task-modal-form" onSubmit={handleSaveTaskEdits}>
+              <label htmlFor="edit-task-status">
+                Status
+                <select
+                  id="edit-task-status"
+                  value={editTaskDraft.status}
+                  onChange={(event) =>
+                    updateEditTaskDraft("status", event.target.value as BoardStatus)
+                  }
+                >
+                  {BOARD_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {statusLabels[status]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label htmlFor="edit-task-title">
+                Title
+                <input
+                  id="edit-task-title"
+                  value={editTaskDraft.title}
+                  onChange={(event) => updateEditTaskDraft("title", event.target.value)}
+                  type="text"
+                />
+              </label>
+
+              <label htmlFor="edit-task-priority">
+                Priority
+                <select
+                  id="edit-task-priority"
+                  value={editTaskDraft.priority}
+                  onChange={(event) =>
+                    updateEditTaskDraft("priority", event.target.value as TaskDraftPriority)
+                  }
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </label>
+
+              <label htmlFor="edit-task-due-date">
+                Due Date
+                <input
+                  id="edit-task-due-date"
+                  value={editTaskDraft.dueDate}
+                  onChange={(event) => updateEditTaskDraft("dueDate", event.target.value)}
+                  type="date"
+                />
+              </label>
+
+              <label htmlFor="edit-task-assignee">
+                Assignee
+                <input
+                  id="edit-task-assignee"
+                  value={editTaskDraft.assignee}
+                  onChange={(event) => updateEditTaskDraft("assignee", event.target.value)}
+                  type="text"
+                />
+              </label>
+
+              <label htmlFor="edit-task-notes" className="task-modal-notes">
+                Notes
+                <textarea
+                  id="edit-task-notes"
+                  value={editTaskDraft.notes}
+                  onChange={(event) => updateEditTaskDraft("notes", event.target.value)}
+                />
+              </label>
+
+              <div className="task-modal-actions">
+                <button type="button" onClick={handleCloseTaskEditor} disabled={isSavingEdit}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="editor-save-button task-modal-save-button"
+                  disabled={isSavingEdit}
+                >
+                  {isSavingEdit ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
