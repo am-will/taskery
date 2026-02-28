@@ -1,4 +1,4 @@
-# Tasky Runbook and Codex Skill Integration
+# Taskery Runbook and Codex Skill Integration
 
 ## Deterministic Local Startup Sequence
 

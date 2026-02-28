@@ -749,7 +749,7 @@ export function startApiServer(): Server {
   const port = parsePort(process.env.API_PORT);
 
   server.listen(port, host, () => {
-    process.stdout.write(`Tasky API listening on http://${host}:${port}\n`);
+    process.stdout.write(`Taskery API listening on http://${host}:${port}\n`);
   });
 
   return server;

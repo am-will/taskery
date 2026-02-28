@@ -1,12 +1,12 @@
-# Tasky Workspace
+# Taskery Workspace
 
-Monorepo for Tasky API, web UI, CLI, and shared contracts.
+Monorepo for Taskery API, web UI, CLI, and shared contracts.
 
 ## Apps
 
 - `apps/api`: Node + Prisma API
 - `apps/web`: React + Vite kanban UI
-- `apps/cli`: Tasky CLI
+- `apps/cli`: Taskery CLI
 - `packages/shared`: shared task schemas, errors, and domain helpers
 
 ## Local Runbook (Deterministic)

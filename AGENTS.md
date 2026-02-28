@@ -1,7 +1,7 @@
-# Tasky Agent Brief
+# Taskery Agent Brief
 
-## What Tasky Is
-Tasky is a local-first Kanban system with three operator surfaces:
+## What Taskery Is
+Taskery is a local-first Kanban system with three operator surfaces:
 - Web board (`apps/web`) for drag/drop workflow management.
 - API (`apps/api`) for persistence, validation, and concurrency control.
 - CLI (`apps/cli`, command: `taskery`) for automation/Codex-driven task ops.
