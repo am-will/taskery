@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { before, after, beforeEach, test } from "node:test";
@@ -27,23 +27,36 @@ const prisma = new PrismaClient({
 let server;
 let baseUrl;
 
+async function applyAllMigrations(url) {
+  const migrationsPath = join(apiRoot, "prisma", "migrations");
+  const migrationEntries = await readdir(migrationsPath, { withFileTypes: true });
+  const migrationDirs = migrationEntries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+
+  for (const migrationDir of migrationDirs) {
+    execFileSync(
+      "pnpm",
+      [
+        "prisma",
+        "db",
+        "execute",
+        "--url",
+        url,
+        "--file",
+        `prisma/migrations/${migrationDir}/migration.sql`,
+      ],
+      {
+        cwd: apiRoot,
+        stdio: "pipe",
+      },
+    );
+  }
+}
+
 before(async () => {
-  execFileSync(
-    "pnpm",
-    [
-      "prisma",
-      "db",
-      "execute",
-      "--url",
-      databaseUrl,
-      "--file",
-      "prisma/migrations/20260226063009_init_taskboard/migration.sql",
-    ],
-    {
-    cwd: apiRoot,
-    stdio: "pipe",
-  },
-  );
+  await applyAllMigrations(databaseUrl);
 
   server = createApiServer();
   await new Promise((resolve) => {
@@ -324,4 +337,63 @@ test("task endpoints return 404 TASK_NOT_FOUND for missing task ids", async () =
   assert.equal(deleteResult.response.status, 404);
   assert.equal(deleteResult.body.code, "TASK_NOT_FOUND");
   assert.match(deleteResult.body.message, /task_does_not_exist/);
+});
+
+test("task mutations append audit trail events for create, update, move, and delete", async () => {
+  const createdTask = await createTask({
+    title: "Audit trail path",
+    notes: "created via integration test",
+  });
+
+  const updateResult = await requestJson(`/api/tasks/${createdTask.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      title: "Audit trail path updated",
+      expectedVersion: createdTask.version,
+    }),
+  });
+  assert.equal(updateResult.response.status, 200);
+
+  const movedTask = updateResult.body.task;
+  const moveResult = await requestJson(`/api/tasks/${createdTask.id}/move`, {
+    method: "POST",
+    body: JSON.stringify({
+      toStatus: "STARTED",
+      expectedVersion: movedTask.version,
+    }),
+  });
+  assert.equal(moveResult.response.status, 200);
+
+  const deleteResult = await requestJson(`/api/tasks/${createdTask.id}`, {
+    method: "DELETE",
+    body: JSON.stringify({
+      expectedVersion: moveResult.body.task.version,
+    }),
+  });
+  assert.equal(deleteResult.response.status, 200);
+
+  const events = await prisma.taskEvent.findMany({
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+
+  assert.equal(events.length, 4);
+  assert.deepEqual(
+    events.map((event) => event.eventType),
+    ["TASK_CREATED", "TASK_UPDATED", "TASK_MOVED", "TASK_DELETED"],
+  );
+  assert.equal(events[0].taskId, null);
+  assert.equal(events[1].taskId, null);
+  assert.equal(events[2].taskId, null);
+  assert.equal(events[3].taskId, null);
+
+  const createPayload = JSON.parse(events[0].payload ?? "{}");
+  const updatePayload = JSON.parse(events[1].payload ?? "{}");
+  const movePayload = JSON.parse(events[2].payload ?? "{}");
+  const deletePayload = JSON.parse(events[3].payload ?? "{}");
+  assert.equal(createPayload.task.id, createdTask.id);
+  assert.equal(updatePayload.task.id, createdTask.id);
+  assert.equal(movePayload.task.id, createdTask.id);
+  assert.equal(deletePayload.mutation, "delete");
+  assert.equal(deletePayload.task.id, createdTask.id);
+  assert.equal(deletePayload.task.status, "STARTED");
 });

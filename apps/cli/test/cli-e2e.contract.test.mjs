@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -8,10 +8,39 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 
 const API_HOST = "127.0.0.1";
-const API_MIGRATION_FILE = "prisma/migrations/20260226063009_init_taskboard/migration.sql";
 const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const cliRoot = fileURLToPath(new URL("..", import.meta.url));
 const apiRoot = fileURLToPath(new URL("../../api", import.meta.url));
+
+async function applyAllMigrations(databaseUrl) {
+  const migrationsPath = join(apiRoot, "prisma", "migrations");
+  const migrationEntries = await readdir(migrationsPath, { withFileTypes: true });
+  const migrationDirs = migrationEntries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+
+  for (const migrationDir of migrationDirs) {
+    execFileSync(
+      "pnpm",
+      [
+        "exec",
+        "prisma",
+        "db",
+        "execute",
+        "--url",
+        databaseUrl,
+        "--file",
+        `prisma/migrations/${migrationDir}/migration.sql`,
+      ],
+      {
+        cwd: apiRoot,
+        encoding: "utf8",
+        stdio: "pipe",
+      },
+    );
+  }
+}
 
 async function waitForHealthyApi(apiBaseUrl, apiProc, apiLogs, maxAttempts = 60) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -125,26 +154,7 @@ test("cli e2e emits json by default and maps not-found/conflict exit codes", asy
   const apiPort = await reserveEphemeralPort();
   const apiBaseUrl = `http://${API_HOST}:${apiPort}`;
 
-  execFileSync(
-    "pnpm",
-    [
-      "--filter",
-      "@taskboard/api",
-      "exec",
-      "prisma",
-      "db",
-      "execute",
-      "--url",
-      databaseUrl,
-      "--file",
-      API_MIGRATION_FILE,
-    ],
-    {
-      cwd: apiRoot,
-      encoding: "utf8",
-      stdio: "pipe",
-    },
-  );
+  await applyAllMigrations(databaseUrl);
 
   const apiProc = spawn("pnpm", ["--filter", "@taskboard/api", "exec", "tsx", "src/index.ts"], {
     cwd: workspaceRoot,

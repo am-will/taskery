@@ -43,12 +43,12 @@ model Task {
 
 model TaskEvent {
   id        String   @id @default(cuid())
-  taskId    String
+  taskId    String?
   eventType String
   payload   String?
   createdAt DateTime @default(now())
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([taskId, createdAt])
 }

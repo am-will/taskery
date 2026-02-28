@@ -51,7 +51,7 @@ When local schema/migration state is broken:
    - `pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
 3. If DB file is corrupted/locked, remove only local SQLite files and reapply:
    - `trash apps/api/prisma/dev.db apps/api/prisma/dev.db-journal`
-   - `pnpm --filter @taskboard/api exec prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260226063009_init_taskboard/migration.sql`
+   - `pnpm --filter @taskboard/api exec prisma migrate deploy --schema prisma/schema.prisma`
    - `pnpm --filter @taskboard/api exec tsx prisma/seed.ts`
 
 ## Codex Skill Integration via CLI

@@ -22,6 +22,15 @@ const DEFAULT_CORS_ALLOWED_ORIGINS = [
 ];
 const TASK_ID_ROUTE_TEMPLATE = "/api/tasks/:id";
 const TASK_MOVE_ROUTE_TEMPLATE = "/api/tasks/:id/move";
+const TASK_MUTATION_EVENT_TYPES = {
+  TASK_CREATED: "TASK_CREATED",
+  TASK_UPDATED: "TASK_UPDATED",
+  TASK_MOVED: "TASK_MOVED",
+  TASK_DELETED: "TASK_DELETED",
+} as const;
+
+type TaskMutationEventType =
+  (typeof TASK_MUTATION_EVENT_TYPES)[keyof typeof TASK_MUTATION_EVENT_TYPES];
 
 function createPrismaClient(): PrismaClient {
   const databaseUrl = process.env.DATABASE_URL;
@@ -171,6 +180,37 @@ function toTaskDto(record: PrismaTask): Task {
   };
 }
 
+function toTaskEventSnapshot(record: PrismaTask): Record<string, unknown> {
+  return {
+    id: record.id,
+    title: record.title,
+    status: record.status,
+    priority: record.priority,
+    dueAt: record.dueAt?.toISOString() ?? null,
+    assignee: record.assignee,
+    notes: record.notes,
+    position: record.position,
+    version: record.version,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+async function appendTaskMutationEvent(
+  tx: Prisma.TransactionClient,
+  taskId: string | null,
+  eventType: TaskMutationEventType,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  await tx.taskEvent.create({
+    data: {
+      taskId,
+      eventType,
+      payload: JSON.stringify(payload),
+    },
+  });
+}
+
 function extractTaskId(pathname: string): string | null {
   const match = /^\/api\/tasks\/([^/]+)$/.exec(pathname);
   return match?.[1] ?? null;
@@ -262,8 +302,23 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       data.notes = input.notes;
     }
 
-    const created = await prisma.task.create({
-      data,
+    const created = await prisma.$transaction(async (tx) => {
+      const createdTask = await tx.task.create({
+        data,
+      });
+
+      await appendTaskMutationEvent(
+        tx,
+        createdTask.id,
+        TASK_MUTATION_EVENT_TYPES.TASK_CREATED,
+        {
+          mutation: "create",
+          input,
+          task: toTaskEventSnapshot(createdTask),
+        },
+      );
+
+      return createdTask;
     });
 
     sendJson(response, 201, { task: toTaskDto(created) });
@@ -295,10 +350,24 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
             );
           }
 
-          return tx.task.update({
+          const updatedTask = await tx.task.update({
             where: { id: taskId },
             data: toPrismaUpdateData(input),
           });
+
+          await appendTaskMutationEvent(
+            tx,
+            updatedTask.id,
+            TASK_MUTATION_EVENT_TYPES.TASK_UPDATED,
+            {
+              mutation: "update",
+              input,
+              previousVersion: current.version,
+              task: toTaskEventSnapshot(updatedTask),
+            },
+          );
+
+          return updatedTask;
         });
 
         sendJson(response, 200, { task: toTaskDto(updated) });
@@ -306,9 +375,25 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       }
 
       try {
-        const updated = await prisma.task.update({
-          where: { id: taskId },
-          data: toPrismaUpdateData(input),
+        const updated = await prisma.$transaction(async (tx) => {
+          const updatedTask = await tx.task.update({
+            where: { id: taskId },
+            data: toPrismaUpdateData(input),
+          });
+
+          await appendTaskMutationEvent(
+            tx,
+            updatedTask.id,
+            TASK_MUTATION_EVENT_TYPES.TASK_UPDATED,
+            {
+              mutation: "update",
+              input,
+              previousVersion: updatedTask.version - 1,
+              task: toTaskEventSnapshot(updatedTask),
+            },
+          );
+
+          return updatedTask;
         });
         sendJson(response, 200, { task: toTaskDto(updated) });
       } catch (error) {
@@ -366,7 +451,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
           position = getNextPosition(topTask === null ? [] : [topTask.position]);
         }
 
-        return tx.task.update({
+        const movedTask = await tx.task.update({
           where: { id: taskId },
           data: {
             status: input.toStatus,
@@ -374,6 +459,21 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
             version: { increment: 1 },
           },
         });
+
+        await appendTaskMutationEvent(
+          tx,
+          movedTask.id,
+          TASK_MUTATION_EVENT_TYPES.TASK_MOVED,
+          {
+            mutation: "move",
+            input,
+            fromStatus: current.status,
+            fromPosition: current.position,
+            task: toTaskEventSnapshot(movedTask),
+          },
+        );
+
+        return movedTask;
       });
 
       sendJson(response, 200, { task: toTaskDto(moved) });
@@ -390,7 +490,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       const deleted = await prisma.$transaction(async (tx) => {
         const current = await tx.task.findUnique({
           where: { id: taskId },
-          select: { id: true, version: true },
         });
         if (current === null) {
           throw new ApiError(404, ERROR_CODES.TASK_NOT_FOUND, `Task ${taskId} was not found`);
@@ -403,6 +502,17 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
             { expectedVersion: input.expectedVersion, actualVersion: current.version },
           );
         }
+
+        await appendTaskMutationEvent(
+          tx,
+          current.id,
+          TASK_MUTATION_EVENT_TYPES.TASK_DELETED,
+          {
+            mutation: "delete",
+            input,
+            task: toTaskEventSnapshot(current),
+          },
+        );
 
         return tx.task.delete({
           where: { id: taskId },
