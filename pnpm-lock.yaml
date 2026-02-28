@@ -39,7 +39,7 @@ importers:
         specifier: ^6.19.2
         version: 6.19.2(typescript@5.9.3)
       taskery-shared:
-        specifier: workspace:*
+        specifier: workspace:^0.1.1
         version: link:../../packages/shared
     devDependencies:
       '@types/node':

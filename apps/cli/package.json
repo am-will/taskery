@@ -1,7 +1,7 @@
 {
   "name": "taskery",
   "private": false,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "bin": {
     "taskery": "dist/bin/taskboard.js"
@@ -21,7 +21,7 @@
   "dependencies": {
     "@prisma/client": "^6.19.2",
     "prisma": "^6.19.2",
-    "taskery-shared": "workspace:*"
+    "taskery-shared": "workspace:^0.1.1"
   },
   "publishConfig": {
     "access": "public"
