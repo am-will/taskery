@@ -52,57 +52,6 @@ curl http://localhost:4010/api/health
 
 ---
 
-## Using the CLI
-
-The CLI outputs JSON by default so agents can parse it. Add `--text` for a human-readable view.
-
-```bash
-# See all tasks
-pnpm --filter taskery-cli exec taskery list
-
-# Human-readable output
-pnpm --filter taskery-cli exec taskery list --text
-
-# Create a task
-pnpm --filter taskery-cli exec taskery create "Write launch blog post" \
-  --assignee "Alex" \
-  --priority HIGH \
-  --dueAt "2026-03-10"
-
-# Look at a specific task (you'll need the version number for updates)
-pnpm --filter taskery-cli exec taskery show <taskId>
-
-# Move a task to a new column
-pnpm --filter taskery-cli exec taskery move <taskId> \
-  --toStatus REVIEW \
-  --expectedVersion <version>
-
-# Update a task
-pnpm --filter taskery-cli exec taskery update <taskId> \
-  --title "Updated title" \
-  --expectedVersion <version>
-
-# Delete a task
-pnpm --filter taskery-cli exec taskery delete <taskId> \
-  --expectedVersion <version>
-```
-
-### Why `--expectedVersion`?
-
-This prevents race conditions. Before you move, update, or delete a task, you run `show` to get its current `version`. Then you pass that version along with your change. If someone (or some agent) changed the task in between, you'll get a `VERSION_CONFLICT` error instead of blindly overwriting their work. It's the same idea as ETags in HTTP.
-
-### Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | Something broke (API unreachable, runtime error) |
-| `2` | Bad input (validation failed) |
-| `3` | Task not found |
-| `4` | Version conflict — re-fetch and try again |
-
----
-
 ## Using Taskery with AI Coding Agents
 
 This is the main reason Taskery exists. Any CLI agent — Codex, Claude, OpenClaw, or anything else that can run shell commands — can manage tasks on your board.
@@ -160,6 +109,57 @@ All responses follow the same envelope:
 // Error
 { "ok": false, "error": { "code": "VERSION_CONFLICT", "message": "..." } }
 ```
+
+---
+
+## Using the CLI
+
+The CLI outputs JSON by default so agents can parse it. Add `--text` for a human-readable view.
+
+```bash
+# See all tasks
+pnpm --filter taskery-cli exec taskery list
+
+# Human-readable output
+pnpm --filter taskery-cli exec taskery list --text
+
+# Create a task
+pnpm --filter taskery-cli exec taskery create "Write launch blog post" \
+  --assignee "Alex" \
+  --priority HIGH \
+  --dueAt "2026-03-10"
+
+# Look at a specific task (you'll need the version number for updates)
+pnpm --filter taskery-cli exec taskery show <taskId>
+
+# Move a task to a new column
+pnpm --filter taskery-cli exec taskery move <taskId> \
+  --toStatus REVIEW \
+  --expectedVersion <version>
+
+# Update a task
+pnpm --filter taskery-cli exec taskery update <taskId> \
+  --title "Updated title" \
+  --expectedVersion <version>
+
+# Delete a task
+pnpm --filter taskery-cli exec taskery delete <taskId> \
+  --expectedVersion <version>
+```
+
+### Why `--expectedVersion`?
+
+This prevents race conditions. Before you move, update, or delete a task, you run `show` to get its current `version`. Then you pass that version along with your change. If someone (or some agent) changed the task in between, you'll get a `VERSION_CONFLICT` error instead of blindly overwriting their work. It's the same idea as ETags in HTTP.
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Something broke (API unreachable, runtime error) |
+| `2` | Bad input (validation failed) |
+| `3` | Task not found |
+| `4` | Version conflict — re-fetch and try again |
 
 ---
 
