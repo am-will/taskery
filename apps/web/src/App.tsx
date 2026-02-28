@@ -417,16 +417,19 @@ const fetchBoardSnapshot = async (): Promise<BoardState> => {
   return toBoardStateFromApiTasks(parsedTasks);
 };
 
+const BORDER_THEMES = ["rainbow", "yellow", "blue", "red", "indigo", "green", "off"] as const;
+type BorderTheme = (typeof BORDER_THEMES)[number];
+
 const syncStatusMessage = (status: BoardSyncStatus): string => {
   if (status === "synced") {
-    return "Sync current with CLI updates.";
+    return "Synced";
   }
 
   if (status === "stale") {
-    return "Sync stale. Retrying CLI update refresh.";
+    return "Not Synced";
   }
 
-  return "Sync in progress. Checking for CLI updates.";
+  return "Syncing";
 };
 
 const toDateInputValue = (isoDate: string | null | undefined): string => {
@@ -712,6 +715,7 @@ export function App() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTaskDraft, setEditTaskDraft] = useState(defaultEditTaskDraft);
   const [syncStatus, setSyncStatus] = useState<BoardSyncStatus>("syncing");
+  const [borderTheme, setBorderTheme] = useState<BorderTheme>("rainbow");
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingTaskIds, setDeletingTaskIds] = useState<Set<string>>(new Set());
@@ -932,6 +936,13 @@ export function App() {
     value: EditTaskDraft[K],
   ) => {
     setEditTaskDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const cycleBorderTheme = () => {
+    setBorderTheme((current) => {
+      const idx = BORDER_THEMES.indexOf(current);
+      return BORDER_THEMES[(idx + 1) % BORDER_THEMES.length] ?? "rainbow";
+    });
   };
 
   const draggingTaskRecord = draggingTaskId ? findTaskRecord(board, draggingTaskId) : null;
@@ -1241,7 +1252,7 @@ export function App() {
   };
 
   return (
-    <main className="app-root">
+    <main className="app-root" data-theme={borderTheme}>
       <section
         className="board-shell"
         data-testid="board-shell"
@@ -1251,15 +1262,21 @@ export function App() {
         <header className="board-header">
           <h1>Taskery</h1>
           <div className="board-header-meta">
-            <p>Desktop workflow shell</p>
-            <p
+            <span
               className={`sync-indicator sync-${syncStatus}`}
               data-testid="sync-indicator"
               data-sync-status={syncStatus}
               aria-live="polite"
             >
               {syncStatusMessage(syncStatus)}
-            </p>
+            </span>
+            <button
+              type="button"
+              className={`theme-toggle theme-toggle-${borderTheme}`}
+              onClick={cycleBorderTheme}
+              aria-label="Cycle border theme color"
+              title={`Theme: ${borderTheme}`}
+            />
           </div>
         </header>
 
