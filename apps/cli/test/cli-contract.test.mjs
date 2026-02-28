@@ -30,4 +30,16 @@ test("taskery CLI exposes required command surface", () => {
   assert.match(help.stdout, /--settings/i);
   assert.match(help.stdout, /CLI_API_BASE_URL/i);
   assert.match(help.stdout, /Exit Codes/i);
+
+  const jsonHelp = spawnSync(
+    "pnpm",
+    ["--filter", "taskery-cli", "exec", "tsx", "src/bin/taskboard.ts", "--json", "--help"],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    },
+  );
+  assert.equal(jsonHelp.status, 0, `json help command failed: ${jsonHelp.stderr}`);
+  assert.match(jsonHelp.stdout, /Usage:/i);
+  assert.doesNotMatch(jsonHelp.stdout, /\"ok\"\s*:\s*true/i);
 });

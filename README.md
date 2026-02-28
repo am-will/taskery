@@ -134,7 +134,8 @@ All responses follow the same envelope:
 
 ## Using the CLI
 
-The CLI outputs JSON by default so agents can parse it. Add `--text` for a human-readable view.
+The CLI outputs JSON by default so agents can parse it. Help output is always human-readable.
+Add `--text` for human-readable command responses.
 
 If you installed globally (with pnpm or npm), use `taskery ...`. If you're developing inside this repo, use `pnpm --filter taskery-cli exec taskery ...`.
 

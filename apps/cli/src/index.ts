@@ -963,11 +963,7 @@ export async function runTaskboardCli(argv: string[] = process.argv.slice(2)): P
 
   if (showHelp || parsed.command === null) {
     const helpText = buildHelpText();
-    if (parsed.json) {
-      process.stdout.write(`${JSON.stringify({ ok: true, data: { help: helpText } })}\n`);
-    } else {
-      process.stdout.write(helpText);
-    }
+    process.stdout.write(helpText);
     return EXIT_CODE_SUCCESS;
   }
 
