@@ -17,6 +17,12 @@ type ParsedArgs = {
   flags: Map<string, string | boolean>;
 };
 
+type ActionFlagMapping = {
+  flag: string;
+  command: CommandName;
+  positionalName: string;
+};
+
 type CliSuccess = {
   ok: true;
   value: unknown;
@@ -124,12 +130,63 @@ function isCommandName(value: string): value is CommandName {
   );
 }
 
+const ACTION_FLAG_MAPPINGS: ActionFlagMapping[] = [
+  { flag: "create", command: "create", positionalName: "title" },
+  { flag: "list", command: "list", positionalName: "unused" },
+  { flag: "show", command: "show", positionalName: "task id" },
+  { flag: "update", command: "update", positionalName: "task id" },
+  { flag: "move", command: "move", positionalName: "task id" },
+  { flag: "delete", command: "delete", positionalName: "task id" },
+];
+
+function normalizeActionFlagCommand(parsed: ParsedArgs): CliFailure | null {
+  if (parsed.command !== null) {
+    return null;
+  }
+
+  const matched = ACTION_FLAG_MAPPINGS.filter((entry) => parsed.flags.has(entry.flag));
+  if (matched.length === 0) {
+    return null;
+  }
+  if (matched.length > 1) {
+    return toCliFailure(
+      ERROR_CODES.VALIDATION_ERROR,
+      `Only one command flag is allowed (${matched.map((entry) => `--${entry.flag}`).join(", ")})`,
+      EXIT_CODE_VALIDATION,
+    );
+  }
+
+  const selected = matched[0];
+  if (!selected) {
+    return null;
+  }
+  parsed.command = selected.command;
+
+  const rawValue = parsed.flags.get(selected.flag);
+  if (typeof rawValue === "string") {
+    parsed.positional.unshift(rawValue);
+  } else if (rawValue === true && selected.command !== "list") {
+    const implicitValue = readStringFlag(parsed.flags, "id");
+    if (implicitValue === undefined && selected.command !== "create") {
+      return toCliFailure(
+        ERROR_CODES.VALIDATION_ERROR,
+        `${selected.positionalName} is required`,
+        EXIT_CODE_VALIDATION,
+      );
+    }
+  }
+
+  parsed.flags.delete(selected.flag);
+  return null;
+}
+
 function buildHelpText(): string {
   return [
     "Tasky CLI",
     "",
     "Usage:",
     "  taskboard [--json|--text] <command> [arguments] [--flags]",
+    "  tasky [--json|--text] --<action> [value] [--flags]",
     "",
     "Commands:",
     "  create   Create a task",
@@ -146,11 +203,17 @@ function buildHelpText(): string {
     "",
     "Examples:",
     "  taskboard create \"Ship CLI\" --priority HIGH",
+    "  tasky --create \"Ship CLI\" --priority HIGH",
     "  taskboard list --status STARTED",
+    "  tasky --list --status STARTED",
     "  taskboard show task_123",
+    "  tasky --show task_123",
     "  taskboard update task_123 --title \"Rename\" --expectedVersion 2",
+    "  tasky --update task_123 --title \"Rename\" --expectedVersion 2",
     "  taskboard move task_123 --toStatus REVIEW --expectedVersion 3",
+    "  tasky --move task_123 --toStatus REVIEW --expectedVersion 3",
     "  taskboard delete task_123 --expectedVersion 4",
+    "  tasky --delete task_123 --expectedVersion 4",
     "",
   ].join("\n");
 }
@@ -640,6 +703,11 @@ function isCliFailure(value: number | CliFailure | undefined): value is CliFailu
 
 export async function runTaskboardCli(argv: string[] = process.argv.slice(2)): Promise<number> {
   const parsed = parseArgs(argv);
+  const actionFlagError = normalizeActionFlagCommand(parsed);
+  if (actionFlagError) {
+    printResult(actionFlagError, parsed.json);
+    return actionFlagError.exitCode;
+  }
   const showHelp = parsed.flags.get("help") === true;
 
   if (showHelp || parsed.command === null) {

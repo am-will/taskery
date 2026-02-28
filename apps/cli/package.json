@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "bin": {
-    "taskboard": "dist/bin/taskboard.js"
+    "taskboard": "dist/bin/taskboard.js",
+    "tasky": "dist/bin/taskboard.js"
   },
   "scripts": {
     "dev": "tsx watch src/bin/taskboard.ts",

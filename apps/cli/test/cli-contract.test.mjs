@@ -14,6 +14,7 @@ test("taskboard CLI exposes required command surface", () => {
 
   assert.equal(help.status, 0, `help command failed: ${help.stderr}`);
   assert.match(help.stdout, /taskboard/i);
+  assert.match(help.stdout, /tasky/i);
   assert.match(help.stdout, /\bcreate\b/i);
   assert.match(help.stdout, /\blist\b/i);
   assert.match(help.stdout, /\bshow\b/i);
@@ -21,4 +22,6 @@ test("taskboard CLI exposes required command surface", () => {
   assert.match(help.stdout, /\bmove\b/i);
   assert.match(help.stdout, /\bdelete\b/i);
   assert.match(help.stdout, /--json/i);
+  assert.match(help.stdout, /--create/i);
+  assert.match(help.stdout, /--move/i);
 });
