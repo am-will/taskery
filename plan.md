@@ -194,7 +194,7 @@ T5 + T7 + T8 + T9 + T10a + T10b + T10c + T10d ──> T11
   - `apps/api/src/index.ts` (edited)
   - `plan.md` (edited)
 
-### T5: Build Taskboard CLI
+### T5: Build Tasky CLI
 - **depends_on**: [T2, T4]
 - **status**: Completed (February 26, 2026)
 - **location**: `apps/cli/src/*`, `apps/cli/bin/taskboard`

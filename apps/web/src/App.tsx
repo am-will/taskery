@@ -814,7 +814,7 @@ export function App() {
         aria-label="Task workflow board"
       >
         <header className="board-header">
-          <h1>Taskboard</h1>
+          <h1>TaskyUI</h1>
           <div className="board-header-meta">
             <p>Desktop workflow shell</p>
             <p

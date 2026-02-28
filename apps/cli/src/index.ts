@@ -126,7 +126,7 @@ function isCommandName(value: string): value is CommandName {
 
 function buildHelpText(): string {
   return [
-    "taskboard CLI",
+    "Tasky CLI",
     "",
     "Usage:",
     "  taskboard [--json|--text] <command> [arguments] [--flags]",
