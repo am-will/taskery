@@ -492,6 +492,17 @@ const getPriorityLabel = (priority: ApiTaskPriority | undefined): string => {
   return "Medium";
 };
 
+const getAssigneeLabel = (
+  assignee: string | null | undefined,
+  priority: ApiTaskPriority | undefined,
+): string => {
+  const normalizedAssignee = assignee?.trim() ?? "";
+  if (normalizedAssignee.length > 0) {
+    return normalizedAssignee;
+  }
+  return getPriorityLabel(priority);
+};
+
 const buildEditDraftFromTask = (task: BoardTask, status: BoardStatus) => ({
   title: task.title,
   status,
@@ -563,7 +574,7 @@ function SortableTaskCard({
       </button>
       <p className="task-card-title">{task.title}</p>
       <div className="task-card-meta" aria-hidden="true">
-        <span className="task-chip">{getPriorityLabel(task.priority)}</span>
+        <span className="task-chip">{getAssigneeLabel(task.assignee, task.priority)}</span>
         <span className="task-chip">{formatDueDateLabel(task.dueAt)}</span>
       </div>
     </article>
@@ -1282,7 +1293,12 @@ export function App() {
               <article className="task-card overlay">
                 <p className="task-card-title">{draggingTaskRecord.task.title}</p>
                 <div className="task-card-meta" aria-hidden="true">
-                  <span className="task-chip">{getPriorityLabel(draggingTaskRecord.task.priority)}</span>
+                  <span className="task-chip">
+                    {getAssigneeLabel(
+                      draggingTaskRecord.task.assignee,
+                      draggingTaskRecord.task.priority,
+                    )}
+                  </span>
                   <span className="task-chip">{formatDueDateLabel(draggingTaskRecord.task.dueAt)}</span>
                 </div>
               </article>
@@ -1305,7 +1321,9 @@ export function App() {
             <article className="task-card overlay external-move-card">
               <p className="task-card-title">{externalMoveOverlay.task.title}</p>
               <div className="task-card-meta">
-                <span className="task-chip">{getPriorityLabel(externalMoveOverlay.task.priority)}</span>
+                <span className="task-chip">
+                  {getAssigneeLabel(externalMoveOverlay.task.assignee, externalMoveOverlay.task.priority)}
+                </span>
                 <span className="task-chip">{formatDueDateLabel(externalMoveOverlay.task.dueAt)}</span>
               </div>
             </article>
