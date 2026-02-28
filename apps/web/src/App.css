@@ -20,8 +20,8 @@
   --border-strong: rgba(255, 255, 255, 0.12);
 
   --text-primary: #f0f2f7;
-  --text-secondary: #7c869a;
-  --text-muted: #484f5e;
+  --text-secondary: #8f9ab0;
+  --text-muted: #5c667a;
 
   /* ── Status Spectrum ── */
   --status-pending: #eab308;
@@ -175,40 +175,168 @@ body {
   gap: 0.75rem;
 }
 
-/* ── Sync Indicator ── */
+/* ── Sync Indicator (dot + text) ── */
 .sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 0.25rem 0.65rem;
-  font-size: 0.7rem;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
-  transition: all 200ms ease;
+  letter-spacing: 0.02em;
+  transition: color 200ms ease;
 }
 
-.sync-indicator.sync-syncing {
-  border-color: rgba(59, 130, 246, 0.4);
-  color: rgba(147, 197, 253, 0.9);
-  background: rgba(59, 130, 246, 0.08);
-  animation: pulse-sync 2s ease infinite;
+.sync-indicator::before {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 200ms ease, box-shadow 200ms ease;
 }
 
 .sync-indicator.sync-synced {
-  border-color: rgba(16, 185, 129, 0.4);
-  color: rgba(110, 231, 183, 0.9);
-  background: rgba(16, 185, 129, 0.08);
+  color: rgba(110, 231, 183, 0.85);
+}
+
+.sync-indicator.sync-synced::before {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.sync-indicator.sync-syncing {
+  color: rgba(147, 197, 253, 0.85);
+}
+
+.sync-indicator.sync-syncing::before {
+  background: #3b82f6;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.5);
+  animation: pulse-dot 1.5s ease infinite;
 }
 
 .sync-indicator.sync-stale {
-  border-color: rgba(239, 68, 68, 0.4);
-  color: rgba(252, 165, 165, 0.9);
-  background: rgba(239, 68, 68, 0.08);
+  color: rgba(252, 165, 165, 0.85);
 }
 
-@keyframes pulse-sync {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+.sync-indicator.sync-stale::before {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* ── Theme Toggle Circle ── */
+.theme-toggle {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.theme-toggle:hover {
+  transform: scale(1.15);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.theme-toggle:active {
+  transform: scale(0.92);
+}
+
+.theme-toggle-rainbow {
+  background: conic-gradient(#eab308, #3b82f6, #a855f7, #ef4444, #10b981, #eab308);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.theme-toggle-yellow {
+  background: #eab308;
+  border-color: rgba(234, 179, 8, 0.6);
+  box-shadow: 0 0 8px rgba(234, 179, 8, 0.3);
+}
+
+.theme-toggle-blue {
+  background: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+}
+
+.theme-toggle-red {
+  background: #ef4444;
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+.theme-toggle-indigo {
+  background: #a855f7;
+  border-color: rgba(168, 85, 247, 0.6);
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.3);
+}
+
+.theme-toggle-green {
+  background: #10b981;
+  border-color: rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+}
+
+.theme-toggle-off {
+  background: transparent;
+  border-color: var(--text-muted);
+  border-style: dashed;
+}
+
+/* ── Per-Theme Color Variables ── */
+.app-root[data-theme="yellow"] { --theme-color: #eab308; --theme-dim: rgba(234, 179, 8, 0.5); --theme-glow: rgba(234, 179, 8, 0.05); }
+.app-root[data-theme="blue"]   { --theme-color: #3b82f6; --theme-dim: rgba(59, 130, 246, 0.5); --theme-glow: rgba(59, 130, 246, 0.05); }
+.app-root[data-theme="red"]    { --theme-color: #ef4444; --theme-dim: rgba(239, 68, 68, 0.5); --theme-glow: rgba(239, 68, 68, 0.05); }
+.app-root[data-theme="indigo"] { --theme-color: #a855f7; --theme-dim: rgba(168, 85, 247, 0.5); --theme-glow: rgba(168, 85, 247, 0.05); }
+.app-root[data-theme="green"]  { --theme-color: #10b981; --theme-dim: rgba(16, 185, 129, 0.5); --theme-glow: rgba(16, 185, 129, 0.05); }
+
+/* Single-color border override */
+.app-root:is([data-theme="yellow"], [data-theme="blue"], [data-theme="red"], [data-theme="indigo"], [data-theme="green"]) .board-shell {
+  background:
+    linear-gradient(rgba(15, 19, 24, 0.92), rgba(15, 19, 24, 0.92)) padding-box,
+    conic-gradient(
+      from var(--gradient-angle),
+      transparent 0%,
+      var(--theme-dim) 5%,
+      var(--theme-color) 15%,
+      var(--theme-color) 30%,
+      var(--theme-dim) 40%,
+      transparent 50%,
+      transparent 100%
+    ) border-box;
+}
+
+/* Single-color ambient override */
+.app-root:is([data-theme="yellow"], [data-theme="blue"], [data-theme="red"], [data-theme="indigo"], [data-theme="green"])::before {
+  background:
+    radial-gradient(circle at 25% 25%, var(--theme-glow), transparent 50%),
+    radial-gradient(circle at 75% 75%, var(--theme-glow), transparent 45%),
+    radial-gradient(circle at 50% 50%, var(--theme-glow), transparent 55%);
+}
+
+/* Off theme — no animation */
+.app-root[data-theme="off"] .board-shell {
+  border: 1px solid var(--border-default);
+  background: rgba(15, 19, 24, 0.92);
+  animation: none;
+}
+
+.app-root[data-theme="off"]::before {
+  display: none;
 }
 
 /* ── Editor Panel ── */
