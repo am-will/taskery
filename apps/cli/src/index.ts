@@ -1,11 +1,12 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import type { Server } from "node:http";
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { homedir } from "node:os";
+import { homedir, platform } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
   ERROR_CODES,
   type NotificationSettings,
@@ -23,8 +24,20 @@ const DEFAULT_API_BASE_URL = "http://127.0.0.1:4010";
 const DEFAULT_APP_HOST = "127.0.0.1";
 const DEFAULT_APP_PORT = 4010;
 const DEFAULT_TASKERY_DATA_DIR_NAME = ".taskery";
+const TASKERY_PID_FILE_NAME = "taskery.pid";
+const TASKERY_STARTUP_SERVICE_NAME = "taskery.service";
 
-type CommandName = "create" | "list" | "show" | "update" | "move" | "delete" | "settings" | "up";
+type CommandName =
+  | "create"
+  | "list"
+  | "show"
+  | "update"
+  | "move"
+  | "delete"
+  | "settings"
+  | "up"
+  | "down"
+  | "startup";
 
 type ParsedArgs = {
   json: boolean;
@@ -72,6 +85,14 @@ type ApiTaskResponse = {
 
 type ApiNotificationSettingsResponse = {
   settings: NotificationSettings;
+};
+
+type DaemonState = {
+  pid: number;
+  host: string;
+  port: number;
+  dataDir: string;
+  startedAt: string;
 };
 
 function formatListenError(error: Error, host: string, port: number): string {
@@ -156,7 +177,9 @@ function isCommandName(value: string): value is CommandName {
     value === "move" ||
     value === "delete" ||
     value === "settings" ||
-    value === "up"
+    value === "up" ||
+    value === "down" ||
+    value === "startup"
   );
 }
 
@@ -169,6 +192,8 @@ const ACTION_FLAG_MAPPINGS: ActionFlagMapping[] = [
   { flag: "delete", command: "delete", positionalName: "task id" },
   { flag: "settings", command: "settings", positionalName: "unused" },
   { flag: "up", command: "up", positionalName: "unused" },
+  { flag: "down", command: "down", positionalName: "unused" },
+  { flag: "startup", command: "startup", positionalName: "unused" },
 ];
 
 function normalizeActionFlagCommand(parsed: ParsedArgs): CliFailure | null {
@@ -201,7 +226,9 @@ function normalizeActionFlagCommand(parsed: ParsedArgs): CliFailure | null {
     rawValue === true &&
     selected.command !== "list" &&
     selected.command !== "settings" &&
-    selected.command !== "up"
+    selected.command !== "up" &&
+    selected.command !== "down" &&
+    selected.command !== "startup"
   ) {
     const implicitValue = readStringFlag(parsed.flags, "id");
     if (implicitValue === undefined && selected.command !== "create") {
@@ -233,7 +260,9 @@ function buildHelpText(): string {
     "  move <taskId>     Move task to another status",
     "  delete <taskId>   Delete a task",
     "  settings          Show or update notification settings",
-    "  up                Run Taskery API + Web UI in one process",
+    "  up                Run Taskery API + Web UI (daemon by default)",
+    "  down              Stop Taskery daemon process",
+    "  startup           Manage startup auto-run (Linux systemd --user)",
     "",
     "Global Flags:",
     "  --json   Emit machine-readable JSON output (default)",
@@ -241,7 +270,7 @@ function buildHelpText(): string {
     "  --help   Show help",
     "",
     "Action Flags:",
-    "  --create | --list | --show | --update | --move | --delete | --up",
+    "  --create | --list | --show | --update | --move | --delete | --up | --down | --startup",
     "  --settings",
     "",
     "Command Flags:",
@@ -286,9 +315,20 @@ function buildHelpText(): string {
     "    --weeklyHour <0-23>",
     "    --windowMinutes <1-60>",
     "  up:",
-    "    --host <hostname>   Default 127.0.0.1",
-    "    --port <1-65535>    Default 4010",
-    "    --dataDir <path>    Default ~/.taskery",
+    "    --host <hostname>    Default 127.0.0.1",
+    "    --port <1-65535>     Default 4010",
+    "    --dataDir <path>     Default ~/.taskery",
+    "    --foreground <bool>  Run in foreground (default false)",
+    "  down:",
+    "    --dataDir <path>     Default ~/.taskery",
+    "    --port <1-65535>     Force-stop Taskery listener on this port",
+    "  startup:",
+    "    --enable             Install/enable startup service",
+    "    --disable            Disable/remove startup service",
+    "    --status             Show startup service status (default)",
+    "    --host <hostname>    Default 127.0.0.1",
+    "    --port <1-65535>     Default 4010",
+    "    --dataDir <path>     Default ~/.taskery",
     "",
     "Allowed Values:",
     "  STATUS = PENDING | STARTED | BLOCKED | REVIEW | COMPLETE",
@@ -316,6 +356,8 @@ function buildHelpText(): string {
     "  taskery move task_123 --toStatus REVIEW --expectedVersion 3",
     "  taskery delete task_123 --expectedVersion 4",
     "  taskery up --port 4010",
+    "  taskery down",
+    "  taskery startup --enable",
     "",
   ].join("\n");
 }
@@ -502,6 +544,99 @@ function resolveDataDirectory(flags: Map<string, string | boolean>): string {
   return resolve(homedir(), DEFAULT_TASKERY_DATA_DIR_NAME);
 }
 
+function resolvePidFilePath(dataDirectory: string): string {
+  return resolve(dataDirectory, TASKERY_PID_FILE_NAME);
+}
+
+async function readDaemonState(pidFilePath: string): Promise<DaemonState | null> {
+  if (!existsSync(pidFilePath)) {
+    return null;
+  }
+
+  try {
+    const raw = await readFile(pidFilePath, "utf8");
+    const parsed = JSON.parse(raw) as Partial<DaemonState>;
+    if (
+      typeof parsed.pid !== "number" ||
+      !Number.isInteger(parsed.pid) ||
+      typeof parsed.host !== "string" ||
+      typeof parsed.port !== "number" ||
+      !Number.isInteger(parsed.port) ||
+      typeof parsed.dataDir !== "string" ||
+      typeof parsed.startedAt !== "string"
+    ) {
+      return null;
+    }
+    return parsed as DaemonState;
+  } catch {
+    return null;
+  }
+}
+
+async function writeDaemonState(pidFilePath: string, state: DaemonState): Promise<void> {
+  await writeFile(pidFilePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
+function isProcessRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runSystemctlUser(args: string[]): { ok: true; stdout: string } | { ok: false; message: string } {
+  const result = spawnSync("systemctl", ["--user", ...args], {
+    encoding: "utf8",
+  });
+  if (result.status === 0) {
+    return { ok: true, stdout: result.stdout.trim() };
+  }
+  const stderr = result.stderr.trim();
+  const stdout = result.stdout.trim();
+  const details = stderr.length > 0 ? stderr : stdout;
+  return {
+    ok: false,
+    message: details.length > 0 ? details : `systemctl --user ${args.join(" ")} failed`,
+  };
+}
+
+function buildCliProcessArgs(commandArgs: string[]): string[] {
+  const modulePath = fileURLToPath(import.meta.url);
+  const moduleDir = dirname(modulePath);
+  if (modulePath.endsWith(".ts")) {
+    const binEntryPath = resolve(moduleDir, "bin/taskboard.ts");
+    return ["--import", "tsx", binEntryPath, ...commandArgs];
+  }
+  const binEntryPath = resolve(moduleDir, "bin/taskboard.js");
+  return [binEntryPath, ...commandArgs];
+}
+
+function findListeningPids(port: number): number[] {
+  const result = spawnSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    return [];
+  }
+
+  return result.stdout
+    .split("\n")
+    .map((line) => Number.parseInt(line.trim(), 10))
+    .filter((value) => Number.isInteger(value) && value > 0);
+}
+
+function getProcessCommand(pid: number): string {
+  const result = spawnSync("ps", ["-o", "command=", "-p", `${pid}`], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    return "";
+  }
+  return result.stdout.trim();
+}
+
 function resolveDatabaseUrl(dataDirectory: string): string {
   const explicitDatabaseUrl = process.env.DATABASE_URL;
   if (typeof explicitDatabaseUrl === "string" && explicitDatabaseUrl.trim().length > 0) {
@@ -587,33 +722,16 @@ function runPrismaMigrations(databaseUrl: string, schemaPath: string): CliFailur
   );
 }
 
-async function runUp(flags: Map<string, string | boolean>): Promise<number> {
-  const host = readStringFlag(flags, "host") ?? process.env.API_HOST ?? DEFAULT_APP_HOST;
-  const parsedPort = parseIntegerFlag(flags, "port");
-  if (isCliFailure(parsedPort)) {
-    printResult(parsedPort, false);
-    return parsedPort.exitCode;
-  }
-  const port = parsedPort ?? DEFAULT_APP_PORT;
-  if (port < 1 || port > 65535) {
-    const failure = toCliFailure(
-      ERROR_CODES.VALIDATION_ERROR,
-      "Flag --port must be an integer between 1 and 65535",
-      EXIT_CODE_VALIDATION,
-    );
-    printResult(failure, false);
-    return failure.exitCode;
-  }
-
+async function runUpForeground(host: string, port: number, dataDirectory: string): Promise<number> {
   const bundledPaths = resolveBundledAppPaths();
   if (isCliFailure(bundledPaths)) {
     printResult(bundledPaths, false);
     return bundledPaths.exitCode;
   }
 
-  const dataDirectory = resolveDataDirectory(flags);
   await mkdir(dataDirectory, { recursive: true });
   const databaseUrl = resolveDatabaseUrl(dataDirectory);
+  const pidFilePath = resolvePidFilePath(dataDirectory);
 
   const generateFailure = runPrismaGenerate(databaseUrl, bundledPaths.prismaSchemaPath);
   if (generateFailure !== null) {
@@ -675,6 +793,14 @@ async function runUp(flags: Map<string, string | boolean>): Promise<number> {
     return listenFailure.exitCode;
   }
 
+  await writeDaemonState(pidFilePath, {
+    pid: process.pid,
+    host,
+    port,
+    dataDir: dataDirectory,
+    startedAt: new Date().toISOString(),
+  });
+
   const appUrl = `http://${host}:${port}`;
   process.stdout.write(`Taskery is running.\n`);
   process.stdout.write(`Web UI: ${appUrl}\n`);
@@ -688,7 +814,7 @@ async function runUp(flags: Map<string, string | boolean>): Promise<number> {
 
   return await new Promise<number>((resolvePromise) => {
     let resolved = false;
-    const finalize = (exitCode: number) => {
+    const finalize = async (exitCode: number) => {
       if (resolved) {
         return;
       }
@@ -696,6 +822,7 @@ async function runUp(flags: Map<string, string | boolean>): Promise<number> {
       process.off("SIGINT", onSigint);
       process.off("SIGTERM", onSigterm);
       server.off("error", onServerError);
+      await rm(pidFilePath, { force: true });
       resolvePromise(exitCode);
     };
     const shutdown = (signal: "SIGINT" | "SIGTERM") => {
@@ -703,10 +830,10 @@ async function runUp(flags: Map<string, string | boolean>): Promise<number> {
       server.close((error) => {
         if (error) {
           process.stderr.write(`Failed to stop cleanly: ${error.message}\n`);
-          finalize(EXIT_CODE_INTERNAL);
+          void finalize(EXIT_CODE_INTERNAL);
           return;
         }
-        finalize(EXIT_CODE_SUCCESS);
+        void finalize(EXIT_CODE_SUCCESS);
       });
     };
     const onSigint = () => shutdown("SIGINT");
@@ -714,6 +841,302 @@ async function runUp(flags: Map<string, string | boolean>): Promise<number> {
     process.on("SIGINT", onSigint);
     process.on("SIGTERM", onSigterm);
   });
+}
+
+async function runUp(flags: Map<string, string | boolean>): Promise<number> {
+  const host = readStringFlag(flags, "host") ?? process.env.API_HOST ?? DEFAULT_APP_HOST;
+  const parsedPort = parseIntegerFlag(flags, "port");
+  if (isCliFailure(parsedPort)) {
+    printResult(parsedPort, false);
+    return parsedPort.exitCode;
+  }
+  const port = parsedPort ?? DEFAULT_APP_PORT;
+  if (port < 1 || port > 65535) {
+    const failure = toCliFailure(
+      ERROR_CODES.VALIDATION_ERROR,
+      "Flag --port must be an integer between 1 and 65535",
+      EXIT_CODE_VALIDATION,
+    );
+    printResult(failure, false);
+    return failure.exitCode;
+  }
+
+  const foreground = parseBooleanFlag(flags, "foreground");
+  if (isCliFailure(foreground)) {
+    printResult(foreground, false);
+    return foreground.exitCode;
+  }
+  const runInForeground = foreground === true;
+  const dataDirectory = resolveDataDirectory(flags);
+  const pidFilePath = resolvePidFilePath(dataDirectory);
+
+  if (runInForeground) {
+    return runUpForeground(host, port, dataDirectory);
+  }
+
+  await mkdir(dataDirectory, { recursive: true });
+  const existingState = await readDaemonState(pidFilePath);
+  if (existingState && isProcessRunning(existingState.pid)) {
+    const failure = toCliFailure(
+      ERROR_CODES.VALIDATION_ERROR,
+      `Taskery is already running (pid ${existingState.pid}). Use taskery down to stop it first.`,
+      EXIT_CODE_VALIDATION,
+    );
+    printResult(failure, false);
+    return failure.exitCode;
+  }
+  if (existingState && !isProcessRunning(existingState.pid)) {
+    await rm(pidFilePath, { force: true });
+  }
+
+  const daemonArgs = buildCliProcessArgs([
+    "up",
+    "--foreground",
+    "true",
+    "--host",
+    host,
+    "--port",
+    `${port}`,
+    "--dataDir",
+    dataDirectory,
+  ]);
+  const child = spawn(
+    process.execPath,
+    daemonArgs,
+    {
+      detached: true,
+      stdio: "ignore",
+      env: process.env,
+    },
+  );
+  child.unref();
+
+  await writeDaemonState(pidFilePath, {
+    pid: child.pid ?? -1,
+    host,
+    port,
+    dataDir: dataDirectory,
+    startedAt: new Date().toISOString(),
+  });
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await sleep(250);
+    if (!child.pid || !isProcessRunning(child.pid)) {
+      const failure = toCliFailure(
+        ERROR_CODES.INTERNAL_ERROR,
+        "Taskery daemon failed to start. Run taskery up --foreground true for diagnostics.",
+        EXIT_CODE_INTERNAL,
+      );
+      await rm(pidFilePath, { force: true });
+      printResult(failure, false);
+      return failure.exitCode;
+    }
+  }
+  process.stdout.write(`Taskery started in background (pid ${child.pid}).\n`);
+  process.stdout.write(`Web UI: http://${host}:${port}\n`);
+  process.stdout.write(`Use 'taskery down' to stop.\n`);
+  return EXIT_CODE_SUCCESS;
+}
+
+async function runDown(flags: Map<string, string | boolean>): Promise<number> {
+  const dataDirectory = resolveDataDirectory(flags);
+  const pidFilePath = resolvePidFilePath(dataDirectory);
+  const parsedPort = parseIntegerFlag(flags, "port");
+  if (isCliFailure(parsedPort)) {
+    printResult(parsedPort, false);
+    return parsedPort.exitCode;
+  }
+  const state = await readDaemonState(pidFilePath);
+  const targetPort = parsedPort ?? state?.port ?? DEFAULT_APP_PORT;
+  let stoppedPid: number | null = null;
+  let stoppedPortPid: number | null = null;
+
+  const pid = state?.pid ?? -1;
+  if (pid > 0 && isProcessRunning(pid)) {
+    stoppedPid = pid;
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // Continue with cleanup fallback.
+    }
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await sleep(200);
+      if (!isProcessRunning(pid)) {
+        break;
+      }
+    }
+    if (isProcessRunning(pid)) {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // Ignore kill failures.
+      }
+    }
+  }
+
+  await rm(pidFilePath, { force: true });
+
+  const listeningPids = findListeningPids(targetPort);
+  for (const listeningPid of listeningPids) {
+    if (listeningPid <= 0 || !isProcessRunning(listeningPid)) {
+      continue;
+    }
+    const command = getProcessCommand(listeningPid).toLowerCase();
+    const isLikelyTaskery =
+      command.includes("taskery") ||
+      command.includes("taskboard") ||
+      command.includes("src/bin/taskboard") ||
+      command.includes("dist/bin/taskboard");
+    if (!isLikelyTaskery) {
+      continue;
+    }
+
+    stoppedPortPid = listeningPid;
+    try {
+      process.kill(listeningPid, "SIGTERM");
+    } catch {
+      // Continue to force kill if needed.
+    }
+    for (let attempt = 0; attempt < 15; attempt += 1) {
+      await sleep(200);
+      if (!isProcessRunning(listeningPid)) {
+        break;
+      }
+    }
+    if (isProcessRunning(listeningPid)) {
+      try {
+        process.kill(listeningPid, "SIGKILL");
+      } catch {
+        // Ignore.
+      }
+    }
+  }
+
+  if (stoppedPid === null && stoppedPortPid === null) {
+    process.stdout.write("Taskery is not running.\n");
+    return EXIT_CODE_SUCCESS;
+  }
+
+  process.stdout.write(
+    `Taskery stopped${
+      stoppedPid !== null
+        ? ` (pid ${stoppedPid})`
+        : stoppedPortPid !== null
+          ? ` (port listener pid ${stoppedPortPid})`
+          : ""
+    }.\n`,
+  );
+  return EXIT_CODE_SUCCESS;
+}
+
+async function runStartup(flags: Map<string, string | boolean>): Promise<number> {
+  if (platform() !== "linux") {
+    const failure = toCliFailure(
+      ERROR_CODES.VALIDATION_ERROR,
+      "startup is currently supported on Linux only (systemd --user).",
+      EXIT_CODE_VALIDATION,
+    );
+    printResult(failure, false);
+    return failure.exitCode;
+  }
+
+  const enable = flags.get("enable") === true;
+  const disable = flags.get("disable") === true;
+  const statusOnly = flags.get("status") === true || (!enable && !disable);
+  if ((enable && disable) || ((enable || disable) && statusOnly && flags.get("status") === true)) {
+    const failure = toCliFailure(
+      ERROR_CODES.VALIDATION_ERROR,
+      "Use only one of --enable, --disable, or --status.",
+      EXIT_CODE_VALIDATION,
+    );
+    printResult(failure, false);
+    return failure.exitCode;
+  }
+
+  const host = readStringFlag(flags, "host") ?? DEFAULT_APP_HOST;
+  const parsedPort = parseIntegerFlag(flags, "port");
+  if (isCliFailure(parsedPort)) {
+    printResult(parsedPort, false);
+    return parsedPort.exitCode;
+  }
+  const port = parsedPort ?? DEFAULT_APP_PORT;
+  const dataDirectory = resolveDataDirectory(flags);
+  const userSystemdDir = resolve(homedir(), ".config/systemd/user");
+  const servicePath = resolve(userSystemdDir, TASKERY_STARTUP_SERVICE_NAME);
+  const startArgs = buildCliProcessArgs([
+    "up",
+    "--foreground",
+    "true",
+    "--host",
+    host,
+    "--port",
+    `${port}`,
+    "--dataDir",
+    dataDirectory,
+  ]);
+  const stopArgs = buildCliProcessArgs(["down", "--dataDir", dataDirectory]);
+
+  if (statusOnly) {
+    const enabledState = runSystemctlUser(["is-enabled", TASKERY_STARTUP_SERVICE_NAME]);
+    const activeState = runSystemctlUser(["is-active", TASKERY_STARTUP_SERVICE_NAME]);
+    const enabledText = enabledState.ok ? enabledState.stdout : "disabled";
+    const activeText = activeState.ok ? activeState.stdout : "inactive";
+    process.stdout.write(`startup service: ${enabledText}, ${activeText}\n`);
+    process.stdout.write(`service file: ${servicePath}\n`);
+    return EXIT_CODE_SUCCESS;
+  }
+
+  if (enable) {
+    await mkdir(userSystemdDir, { recursive: true });
+    const serviceContent = [
+      "[Unit]",
+      "Description=Taskery background service",
+      "After=network.target",
+      "",
+      "[Service]",
+      "Type=simple",
+      `ExecStart=${process.execPath} ${startArgs.join(" ")}`,
+      `ExecStop=${process.execPath} ${stopArgs.join(" ")}`,
+      "Restart=always",
+      "RestartSec=2",
+      "",
+      "[Install]",
+      "WantedBy=default.target",
+      "",
+    ].join("\n");
+    await writeFile(servicePath, serviceContent, "utf8");
+
+    const reload = runSystemctlUser(["daemon-reload"]);
+    if (!reload.ok) {
+      const failure = toCliFailure(ERROR_CODES.INTERNAL_ERROR, reload.message, EXIT_CODE_INTERNAL);
+      printResult(failure, false);
+      return failure.exitCode;
+    }
+    const enableNow = runSystemctlUser(["enable", "--now", TASKERY_STARTUP_SERVICE_NAME]);
+    if (!enableNow.ok) {
+      const failure = toCliFailure(ERROR_CODES.INTERNAL_ERROR, enableNow.message, EXIT_CODE_INTERNAL);
+      printResult(failure, false);
+      return failure.exitCode;
+    }
+    process.stdout.write("Taskery startup service enabled.\n");
+    return EXIT_CODE_SUCCESS;
+  }
+
+  const disableNow = runSystemctlUser(["disable", "--now", TASKERY_STARTUP_SERVICE_NAME]);
+  if (!disableNow.ok && !disableNow.message.toLowerCase().includes("not loaded")) {
+    const failure = toCliFailure(ERROR_CODES.INTERNAL_ERROR, disableNow.message, EXIT_CODE_INTERNAL);
+    printResult(failure, false);
+    return failure.exitCode;
+  }
+  await rm(servicePath, { force: true });
+  const reload = runSystemctlUser(["daemon-reload"]);
+  if (!reload.ok) {
+    const failure = toCliFailure(ERROR_CODES.INTERNAL_ERROR, reload.message, EXIT_CODE_INTERNAL);
+    printResult(failure, false);
+    return failure.exitCode;
+  }
+  process.stdout.write("Taskery startup service disabled.\n");
+  return EXIT_CODE_SUCCESS;
 }
 
 async function callApi<T>(
@@ -1263,6 +1686,12 @@ export async function runTaskboardCli(argv: string[] = process.argv.slice(2)): P
 
   if (parsed.command === "up") {
     return runUp(parsed.flags);
+  }
+  if (parsed.command === "down") {
+    return runDown(parsed.flags);
+  }
+  if (parsed.command === "startup") {
+    return runStartup(parsed.flags);
   }
 
   const baseUrl = resolveApiBaseUrl();

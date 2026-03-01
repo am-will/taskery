@@ -25,6 +25,8 @@ test("taskery CLI exposes required command surface", () => {
   assert.match(help.stdout, /\bdelete\b/i);
   assert.match(help.stdout, /\bsettings\b/i);
   assert.match(help.stdout, /\bup\b/i);
+  assert.match(help.stdout, /\bdown\b/i);
+  assert.match(help.stdout, /\bstartup\b/i);
   assert.match(help.stdout, /--json/i);
   assert.match(help.stdout, /--text/i);
   assert.match(help.stdout, /--create/i);
@@ -70,6 +72,8 @@ test("taskery up reports a clear error when the port is already in use", async (
         "tsx",
         "src/bin/taskboard.ts",
         "up",
+        "--foreground",
+        "true",
         "--port",
         `${port}`,
       ],

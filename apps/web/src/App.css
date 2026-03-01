@@ -580,6 +580,18 @@ body {
   color-scheme: dark;
 }
 
+.task-form select,
+.task-modal-form select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23cbd5e1' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 0.8rem;
+  padding-right: 2.35rem;
+}
+
 .task-form input:focus,
 .task-form select:focus,
 .task-form textarea:focus,
