@@ -1,7 +1,7 @@
 {
   "name": "taskboard-workspace",
   "private": true,
-  "version": "0.0.2",
+  "version": "0.0.3",
   "packageManager": "pnpm@10.28.0",
   "scripts": {
     "bootstrap": "pnpm install",
@@ -9,6 +9,10 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint",
     "test": "pnpm -r --workspace-concurrency=1 --if-present test",
-    "test:domain": "pnpm --filter taskery-shared test -- src/contracts.test.ts"
+    "test:domain": "pnpm --filter taskery-shared test -- src/contracts.test.ts",
+    "release:patch": "pnpm --filter taskery exec npm version patch --no-git-tag-version",
+    "release:minor": "pnpm --filter taskery exec npm version minor --no-git-tag-version",
+    "release:major": "pnpm --filter taskery exec npm version major --no-git-tag-version",
+    "release:publish": "pnpm --filter taskery publish --access public --no-git-checks"
   }
 }

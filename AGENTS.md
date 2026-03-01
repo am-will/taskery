@@ -44,6 +44,9 @@ Taskery is a local-first Kanban system with three operator surfaces:
 ## Operational Notes
 - Deterministic local run sequence is documented in `README.md` and `docs/codex-skill-taskboard.md`.
 - Current defaults in code use API `4010`, while `.env.example` shows `3011`; set explicit env vars when running to avoid mismatch.
+- Release from repo root using:
+  - `pnpm run release:patch`
+  - `pnpm run release:publish`
 - Contract/integration tests exist under:
   - `apps/api/test`
   - `apps/web/src/*.test.tsx` and `apps/web/src/board/*.test.ts`
